@@ -156,12 +156,19 @@ export async function POST(request) {
       durationSeconds: input.durationSeconds,
     });
 
-    // Record spend for the real provider (estimate-based; we never claim free
-    // unless the provider confirmed it).
+    // Record spend against the dev guard for the real provider. Prefer the
+    // ACTUAL billed amount derived from the provider's reported token usage;
+    // fall back to the pre-call estimate only if usage was not reported.
     if (usingRealProvider) {
-      recordSpendUsd(est.amountUsd);
+      const actual =
+        result.cost?.state === "billed" &&
+        typeof result.cost.amountUsd === "number"
+          ? result.cost.amountUsd
+          : est.amountUsd;
+      recordSpendUsd(actual);
     }
 
+    const billed = result.cost?.state === "billed";
     return NextResponse.json({
       ok: true,
       prompt,
@@ -169,13 +176,19 @@ export async function POST(request) {
       provider: result.provider,
       model: result.model,
       mimeType: result.mimeType,
+      usage: result.usage ?? null,
       video: `data:${result.mimeType};base64,${result.videoBase64}`,
       cost: {
+        // Pre-call estimate (used only for the budget guard / UI preview).
         estimated: est,
+        // What was actually billed, computed from the provider's reported
+        // token usage. state: "billed" | "unknown" | "estimated" (mock).
         reported: result.cost,
         note: result.mock
           ? "Mock generation: no API call, no charge. Estimate shows what a real call would cost."
-          : "Cost is estimated locally; confirm actual billing in Google AI Studio.",
+          : billed
+            ? "Cost computed from the provider's reported token usage × published rates. Reconcile against Google AI Studio billing for the authoritative amount."
+            : "Provider did not report usage; actual cost unknown — check Google AI Studio billing.",
       },
     });
   } catch (err) {

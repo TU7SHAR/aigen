@@ -450,9 +450,23 @@ export default function Studio() {
               >
                 <Download className="h-4 w-4" /> Download MP4
               </a>
-              <div className="text-xs text-zinc-500">
-                Provider: {result.provider} · Model: {result.model} ·{" "}
-                {result.cost?.note}
+              <div className="space-y-1 text-xs text-zinc-500">
+                <div>
+                  Provider: {result.provider} · Model: {result.model}
+                </div>
+                {result.cost?.reported?.state === "billed" && (
+                  <div className="font-medium text-zinc-700 dark:text-zinc-300">
+                    Billed: ${Number(result.cost.reported.amountUsd).toFixed(4)}{" "}
+                    (from reported usage)
+                    {result.usage?.total_tokens
+                      ? ` · ${result.usage.total_tokens} tokens`
+                      : ""}
+                  </div>
+                )}
+                {result.cost?.reported?.state === "unknown" && (
+                  <div>Actual cost unknown — check Google AI Studio billing.</div>
+                )}
+                <div>{result.cost?.note}</div>
               </div>
             </div>
           )}
