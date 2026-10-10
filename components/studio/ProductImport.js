@@ -122,11 +122,11 @@ export default function ProductImport({ onImported }) {
   // ---- render ----
   if (phase === "idle" || phase === "error") {
     return (
-      <div className="rounded-2xl border border-zinc-200 p-6 dark:border-zinc-800">
+      <div className="card p-6">
         <label className="mb-2 block text-sm font-medium">Paste your product page</label>
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+            <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <input
               className="input pl-9"
               placeholder="https://brand.com/products/product-name"
@@ -137,18 +137,18 @@ export default function ProductImport({ onImported }) {
           <button
             onClick={() => runImport(false)}
             disabled={!url.trim()}
-            className="rounded-xl bg-indigo-600 px-5 py-2.5 font-medium text-white transition hover:bg-indigo-700 disabled:opacity-60"
+            className="btn btn-primary disabled:opacity-60"
           >
             Import product
           </button>
         </div>
         {error && (
-          <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink" style={{ borderLeft: "3px solid var(--accent)" }}>
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error} You can switch to manual upload instead.</span>
           </div>
         )}
-        <p className="mt-3 text-xs text-zinc-500">
+        <p className="mt-3 text-xs text-muted">
           We read the product page, extract details and images, and prepare ad
           concepts. No video is generated and nothing is charged at this step.
         </p>
@@ -158,14 +158,14 @@ export default function ProductImport({ onImported }) {
 
   if (phase === "crawling") {
     return (
-      <div className="rounded-2xl border border-zinc-200 p-8 dark:border-zinc-800">
+      <div className="card p-8">
         <div className="flex items-center gap-3">
-          <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+          <Loader2 className="h-5 w-5 animate-spin text-accent" />
           <span className="font-medium">{STAGES[stage]}</span>
         </div>
-        <ul className="mt-4 space-y-1.5 text-sm text-zinc-500">
+        <ul className="mt-4 space-y-1.5 text-sm text-muted">
           {STAGES.map((s, i) => (
-            <li key={s} className={i <= stage ? "text-zinc-700 dark:text-zinc-300" : ""}>
+            <li key={s} className={i <= stage ? "text-ink" : ""}>
               {i < stage ? "✓ " : i === stage ? "• " : "  "}
               {s}
             </li>
@@ -185,8 +185,8 @@ export default function ProductImport({ onImported }) {
   return (
     <div className="space-y-6">
       {warnings.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-          <div className="font-medium">Review these before generating:</div>
+        <div className="card px-4 py-3 text-sm text-ink" style={{ borderLeft: "3px solid var(--accent)" }}>
+          <div className="mono-meta !text-accent mb-1">Review before generating</div>
           <ul className="mt-1 list-disc pl-5">
             {warnings.map((w, i) => (
               <li key={i}>{w}</li>
@@ -196,13 +196,13 @@ export default function ProductImport({ onImported }) {
       )}
 
       <div className="flex items-center justify-between">
-        <div className="text-sm text-zinc-500">
+        <div className="text-sm text-muted">
           Imported via {obs.crawlProvider} · confidence{" "}
           {(p.extractionConfidence ?? 0).toFixed(2)} · {obs.keptImageCount} images kept
         </div>
         <button
           onClick={() => runImport(true)}
-          className="flex items-center gap-1.5 text-sm text-indigo-600 hover:underline"
+          className="flex items-center gap-1.5 text-sm text-accent hover:underline"
         >
           <RefreshCw className="h-3.5 w-3.5" /> Refresh product data
         </button>
@@ -236,12 +236,12 @@ export default function ProductImport({ onImported }) {
         {/* hero + gallery */}
         <div className="space-y-3">
           <span className="block text-sm font-medium">Hero image</span>
-          <div className="aspect-square overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="aspect-square overflow-hidden rounded-brand border border-line bg-surface">
             {heroUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={heroUrl} alt="Hero" className="h-full w-full object-contain" />
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-zinc-400">No image</div>
+              <div className="flex h-full items-center justify-center text-sm text-muted">No image</div>
             )}
           </div>
           <span className="block text-sm font-medium">Gallery (click to choose hero / remove)</span>
@@ -254,7 +254,7 @@ export default function ProductImport({ onImported }) {
                   alt="candidate"
                   onClick={() => setHeroUrl(u)}
                   className={`aspect-square w-full cursor-pointer rounded-lg border object-contain p-1 ${
-                    heroUrl === u ? "border-indigo-500 ring-2 ring-indigo-300" : "border-zinc-200 dark:border-zinc-800"
+                    heroUrl === u ? "border-accent ring-2 ring-[color:var(--accent)]" : "border-line"
                   } ${removed.has(u) ? "opacity-30" : ""}`}
                 />
                 <button
@@ -271,23 +271,23 @@ export default function ProductImport({ onImported }) {
 
       {/* brand review */}
       {brand && (brand.primaryColors?.length || brand.logo || brand.name) && (
-        <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="card p-4">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium">
             <Palette className="h-4 w-4" /> Brand detected
             {brand.name ? `: ${brand.name}` : ""}{" "}
-            <span className="text-xs font-normal text-zinc-500">
+            <span className="text-xs font-normal text-muted">
               (confidence {(brand.confidence ?? 0).toFixed(2)})
             </span>
           </div>
           {brand.confidence < 0.4 && (
-            <p className="mb-2 text-xs text-zinc-500">
+            <p className="mb-2 text-xs text-muted">
               Limited brand identity detected — using product-focused creative direction.
             </p>
           )}
           <div className="flex flex-wrap items-center gap-2">
             {(brand.primaryColors || []).concat(brand.secondaryColors || []).map((c) => (
               <span key={c} className="flex items-center gap-1 text-xs">
-                <span className="inline-block h-5 w-5 rounded border border-zinc-300" style={{ background: c }} />
+                <span className="inline-block h-5 w-5 rounded border border-line" style={{ background: c }} />
                 {c}
               </span>
             ))}
@@ -319,14 +319,14 @@ export default function ProductImport({ onImported }) {
                 key={c.id}
                 onClick={() => setChosenConcept(c.id)}
                 className={`rounded-xl border p-3 text-left transition ${
-                  chosenConcept === c.id ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30" : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800"
+                  chosenConcept === c.id ? "border-accent bg-surface" : "border-line bg-surface hover:border-ink"
                 }`}
               >
                 <div className="flex items-center gap-1.5 font-medium">
-                  {chosenConcept === c.id && <Check className="h-4 w-4 text-indigo-600" />}
+                  {chosenConcept === c.id && <Check className="h-4 w-4 text-accent" />}
                   {c.title}
                 </div>
-                <div className="text-xs text-zinc-500">{c.rationale}</div>
+                <div className="text-xs text-muted">{c.rationale}</div>
               </button>
             ))}
           </div>
@@ -335,7 +335,7 @@ export default function ProductImport({ onImported }) {
 
       <button
         onClick={continueToStudio}
-        className="w-full rounded-xl bg-indigo-600 px-4 py-3 font-medium text-white transition hover:bg-indigo-700"
+        className="btn btn-primary w-full"
       >
         Continue to Ad Studio →
       </button>

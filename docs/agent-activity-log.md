@@ -100,3 +100,34 @@
   live-route smoke test confirmed the poster-reference + brand-color behavior.
   `lib/prompts/adPrompt.js` is now superseded by the creative pipeline.
 - **Branch/PR:** `feat/product-url-import-creative-pipeline` → `main`.
+
+## 2026-10-09 — "Editorial Industrial" design system
+
+- **Asked:** Give the product its own identity (not BhavishAI's ivory/gold +
+  purple). Chose the Editorial Industrial direction: Ink + Warm Bone + Signal
+  Orange + a video frame/crop-mark motif, mono for technical metadata, squared
+  buttons, rationed orange, proper dark theme (not an inversion).
+- **Interpreted:** Implemented as a semantic design-token system wired into
+  Tailwind v4 rather than per-screen styling, so the whole app restyles
+  consistently and future screens inherit it.
+- **Did:** Rebuilt `app/globals.css` with role-based CSS variables (bg/surface/
+  raised/ink/muted/line/accent) for light + a distinct dark elevation ladder,
+  exposed via `@theme inline` (bg-bg, text-ink, border-line, text-accent, …);
+  added component classes (.btn/.card/.input/.eyebrow/.mono-meta/.display) and
+  the frame-corner motif (.frame / .frame-corners). Dark mode toggled by a
+  pre-paint script in `app/layout.js` from prefers-color-scheme. Redesigned the
+  landing page, Studio header, Studio editor (upload dropzone with frame marks,
+  template cards, mono metadata readout, GENERATE VIDEO → CTA, framed result/
+  empty states) and ProductImport (tokens throughout; warnings/errors use an
+  accent left-border instead of off-palette red/amber). Removed all zinc/indigo/
+  emerald/amber/red utility classes from app/ and components/. Added
+  `docs/DESIGN_SYSTEM.md`.
+- **Files affected:** `app/globals.css`, `app/layout.js`, `app/page.js`,
+  `app/studio/page.js`, `components/studio/Studio.js`,
+  `components/studio/ProductImport.js`, `docs/DESIGN_SYSTEM.md`.
+- **Impact:** Distinct, consistent identity (verified: compiled CSS contains
+  #ff5a24 / #f7f6f2 / #111214 and the frame motif; pages render with the new
+  classes). Lint clean; 26/26 tests pass; build OK. No in-app theme toggle and
+  no dedicated logo SVG yet (documented).
+- **Branch/PR:** `feat/editorial-industrial-design-system` → base
+  `feat/product-url-import-creative-pipeline` (stacked on the open PR #3).
