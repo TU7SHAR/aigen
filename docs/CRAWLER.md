@@ -1,10 +1,105 @@
-# Product URL Importer — architecture
+# Source Intelligence (URL Importer) — architecture
 
-_Last updated: 2026-10-09_
+_Last updated: 2026-10-11_
 
-Turns a pasted product URL into a normalized `ProductProfile` + `BrandProfile`
-+ ranked image assets, deterministically and cheaply, so the user reviews real
-extracted data before any paid video generation.
+Turns ANY pasted URL (product, SaaS, service, business, creator, course, app…)
+into a normalized `EntityProfile` + `ProductProfile` (back-compat) +
+`BrandProfile` + ranked assets, so the user reviews real extracted data before
+any paid video generation.
+
+> The importer's job is not "download HTML" — it is "gather enough reliable
+> evidence to understand what the user is advertising." Deterministic parsing is
+> reliable *evidence*; a cheap Gemini TEXT pass turns that evidence into a
+> structured profile; neither invents facts.
+
+## Pipeline (updated)
+
+```
+raw input (e.g. "bhavishai.in")
+   │  normalizeInputUrl  → https://bhavishai.in/   (forgiving; bare domains OK)
+   │  assertSafeUrl       (SSRF unchanged)
+   ▼
+crawl root (DirectFetch → Firecrawl FALLBACK only if extraction is poor)
+   ▼
+structured extraction + content cleaning + classifySource (entity type)
+   │  if root is thin → discoverInternalPages (budget MAX_SITE_PAGES=5) and
+   │  merge facts/images from /pricing /services /about /get-report etc.
+   ▼
+image discovery (product AND web/SaaS roles) + rank + dedup + persist
+   ▼
+brand signals (colors/logo/tagline)
+   ▼
+ContextReducer → AI semantic enrichment (cheap Gemini TEXT) → mergeProfiles
+   ▼
+EntityProfile + ProductProfile + BrandProfile + provenance + confidence
+```
+
+### Why the old importer returned blank fields
+
+It only populated fields from ecommerce `Product` JSON-LD / OpenGraph. A SaaS/
+business homepage (no `Product` schema) therefore produced empty name/price/
+description and "No image", yet still offered generic product concepts. The new
+pipeline classifies the entity, discovers internal pages, and runs AI semantic
+extraction so a business homepage yields a real profile.
+
+### URL normalization (`lib/crawl/normalizeUrl.js`)
+
+`bhavishai.in`, `www.bhavishai.in`, `http(s)://bhavishai.in`, trailing slash and
+quoted input all normalize to a valid https URL **before** validation. The API
+route accepts a loose string (not `z.string().url()`) so a missing scheme no
+longer causes a 422. Non-http schemes and junk are still rejected with a clear
+error. SSRF protection is unchanged.
+
+### Classification + page discovery (`lib/crawl/classify.js`)
+
+`classifySource` picks an entity type (`ecommerce_product | ecommerce_store |
+saas | service | business | creator | portfolio | course | app | landing_page |
+unknown`) from schema presence, URL patterns, OG type and content hints. A root
+URL without product signals leans business/landing — never assumed to be a
+Product. When the root is thin, `discoverInternalPages` ranks a few high-value
+links (`/pricing`, `/services`, `/features`, `/about`, `/get-report`…) and skips
+noise (`/privacy`, `/terms`, `/blog`…), capped by `MAX_SITE_PAGES`.
+
+### AI semantic enrichment (`lib/ai/enrich.js`)
+
+A cheap Gemini TEXT model (`SOURCE_ENRICHMENT_MODEL`, default
+`gemini-3.1-flash-lite`) receives the **reduced** context and returns strict
+JSON (via `responseSchema`) with nullable fields. System instruction forbids
+inventing prices/discounts/guarantees/claims; unsupported fields come back null/
+[]. Degrades gracefully (returns no enrichment, not an error) when disabled or
+keyless. Token usage + a billed-cost estimate are reported and tracked
+separately from video spend.
+
+### Merge layer (`lib/crawl/merge.js`)
+
+Priority: `user_edit > json_ld/structured > open_graph > internal_page >
+page_dom > ai_extracted > ai_inferred`. AI fills GAPS and interpretive fields;
+it never overwrites a present high-confidence structured fact (e.g. a JSON-LD
+price). Every field keeps `{ source, confidence }` provenance.
+
+### Context reduction (`lib/crawl/contextReducer.js`)
+
+Compresses 40k+ chars of crawl into a prioritized ~7k-char block (structured
+facts → title/meta → headings → page content → selected secondary pages → image
+meta) so we never pay to send raw HTML to Gemini.
+
+### Firecrawl fallback (updated)
+
+Direct fetch runs first. Firecrawl is used **automatically** only when direct
+extraction is poor (no name + short text, or short text + no images) AND
+`FIRECRAWL_API_KEY` is set — not via a manual per-request flag, and not both
+providers unnecessarily.
+
+## Separate from this: Generation Context Compiler
+
+See `docs/CREATIVE.md`. Video generation receives a **minimal**
+`GenerationContext` (identity, offer, brand look, hero reference, chosen
+concept, brief) — never the raw crawl, full profile, specs, warnings or every
+image URL.
+
+---
+
+## Legacy notes (still accurate)
 
 ## Flow
 
