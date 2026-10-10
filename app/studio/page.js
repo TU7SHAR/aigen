@@ -9,15 +9,13 @@ export const metadata = {
 export default function StudioPage() {
   return (
     <div className="flex-1">
-      <header className="border-b border-zinc-200 dark:border-zinc-800">
+      <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link href="/" className="font-semibold tracking-tight">
-            AdForge <span className="text-indigo-600">Studio</span>
+          <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+            <span className="text-accent">◩</span> AdForge{" "}
+            <span className="mono-meta !text-ink">STUDIO</span>
           </Link>
-          <Link
-            href="/"
-            className="text-sm text-zinc-500 transition hover:text-zinc-900 dark:hover:text-zinc-200"
-          >
+          <Link href="/" className="btn btn-ghost !px-2 !py-1 text-sm">
             ← Home
           </Link>
         </div>
