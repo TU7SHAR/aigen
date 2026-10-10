@@ -1,6 +1,6 @@
 # Security — MakeAdClips Studio
 
-_Last updated: 2026-10-09_
+_Last updated: 2026-10-11_
 
 ## Current safeguards
 
@@ -55,6 +55,35 @@ so SSRF protection is enforced in `lib/crawl/safeFetch.js`:
 
 Covered by tests in `tests/crawl.test.mjs` (private/metadata IPs, non-http
 schemes, localhost).
+
+## Rendered capture (headless browser) — NOT production-safe, disabled by default
+
+`lib/design/screenshot.js` can render a page in headless Chromium to capture a
+screenshot + computed styles. Loading an arbitrary user URL into a real browser
+is a serious SSRF surface, so this capability is **doubly gated off** and must
+stay off for any public/multi-tenant deployment:
+
+- Requires **both** `ENABLE_RENDERED_CAPTURE=true` **and**
+  `ACKNOWLEDGE_CAPTURE_UNSAFE=true`; otherwise it returns `{ available:false }`
+  and the importer falls back to HTML/CSS design extraction.
+- In-process mitigations (bar-raising, not a boundary): per-subrequest
+  DNS-resolve + IP blocklist (reusing the crawler rules), http(s)-only scheme
+  allowlist, request-count cap, a download-byte budget enforced on **actual
+  received bytes**, and a hard capture-duration cap.
+
+**Why it is not production-safe (honest):**
+1. **DNS rebinding (TOCTOU):** we resolve + check the host IP, but Chromium does
+   its own DNS resolution when it connects, so a hostile resolver can hand the
+   browser a private/metadata IP after our check passes. App-level checks can't
+   fully prevent this.
+2. **`--no-sandbox`:** Chromium is launched without its OS sandbox (required in
+   many container hosts), so a renderer exploit is not contained.
+
+**Correct production posture:** enforce isolation at the network boundary
+OUTSIDE this process — a dedicated egress proxy/firewall that blocks RFC1918,
+loopback, link-local (169.254/16, incl. the metadata endpoint) and ULA for the
+browser's traffic, or a managed isolated-browser service. Until then, use this
+only locally, operator-driven, against trusted URLs.
 
 ## Prelaunch checklist (before any public/paid traffic)
 

@@ -1,6 +1,66 @@
 # Agent activity log
 
-## 2026-10-09 — PR #18 corrections: browser SSRF hardening, selectReference wiring, real tests + E2E proof, avatar-report license fix
+## 2026-10-11 — PR #18 corrections (round 2): honest labeling, allowlist SVG sanitizer, no-fallback reference, real server-pipeline integration test, capture gated unsafe
+
+- **Asked:** reviewer follow-up on PR #19/#20 — (1) don't claim the browser
+  capture is production-safe (DNS rebinding + `--no-sandbox`; Content-Length
+  budget isn't real enforcement); keep public capture disabled; (2) stop
+  claiming `selectReference` does content-relevance, and remove the
+  `heroAssets[0]` fallback when the selector deliberately returns nothing;
+  distinguish verified from creatively-suitable; keep a user pick authoritative;
+  (3) replace the regex SVG sanitizer with a robust allowlist approach + tests;
+  (4) add a real application/server-level integration test (not just a lib E2E);
+  (5) stop backdating docs to Oct 9 — today is Oct 11; (6) land the corrected
+  security code safely in the stacked chain; (7) clearly separate real browser
+  execution, mocked generation, visual relevance, and security validation.
+- **Interpreted + did:**
+  - **Honest labeling (screenshot.js):** added a prominent security banner;
+    the capability is now **doubly gated** (`ENABLE_RENDERED_CAPTURE` **and**
+    `ACKNOWLEDGE_CAPTURE_UNSAFE`) and documents that in-process checks are
+    bar-raising, not a boundary (DNS rebinding TOCTOU + `--no-sandbox`). The
+    download budget is now enforced on **actual received bytes**, not just
+    `Content-Length`. Correct posture (network-level isolation) documented in
+    `docs/SECURITY.md § Rendered capture`. SSRF protections kept intact.
+  - **Reference selection (importProduct.js + selectReference.js):** removed the
+    `heroAssets[0]` fallback — when the selector returns no scene-worthy
+    reference, `primaryImage` is **null** (honest, propagated), not a
+    re-promoted hero. Added a `primaryReferenceSelection` provenance object
+    (`basis: "role_rank_then_resolution"`, not relevance). Documented the module
+    as **role-based, NOT content-relevance**, dropped the misleading
+    `relevanceScore` hint, and made a `userSelectedReference` authoritative
+    (`basis: "user_selected"`) for Milestone 2.
+  - **SVG sanitizer (store.js):** replaced the regex stripper with a real XML
+    parse + strict allowlist (cheerio) — keeps only presentational
+    elements/attributes; drops scripts, event handlers, `<foreignObject>`,
+    external `href`/`use`/`image` refs, `url()`/`javascript:` styles, and
+    DOCTYPE/entity/CDATA (XXE); unknown constructs fail closed. Rasterization
+    with sharp is the defense-in-depth second layer.
+  - **Tests:** added `tests/svg-sanitize.test.mjs` (10 malicious/benign cases)
+    and `tests/generate-route-integration.test.mjs` (server-pipeline: import →
+    selectReference → review handoff → `runGenerate` → recorded mock-provider
+    input; asserts logo-only → no primary, and user pick authoritative). To make
+    the real pipeline testable without Next's `next/server` resolution, extracted
+    the generate pipeline into `lib/api/generateCore.js` (`runGenerate`) and made
+    `app/api/generate/route.js` a thin NextResponse wrapper (behavior identical).
+  - **Docs:** corrected `VISUAL_INTELLIGENCE.md` (role-based selection,
+    no-fallback, capture disabled/unsafe), `SECURITY.md`, `TESTING.md` (scope &
+    honesty note; distinguishes code-correctness from ad quality), and set all
+    touched docs to **2026-10-11** (not Oct 9).
+- **Files affected:** `lib/design/screenshot.js`, `lib/crawl/importProduct.js`,
+  `lib/assets/selectReference.js`, `lib/assets/store.js`,
+  `lib/api/generateCore.js` (new), `app/api/generate/route.js`,
+  `tests/svg-sanitize.test.mjs` (new),
+  `tests/generate-route-integration.test.mjs` (new), `docs/VISUAL_INTELLIGENCE.md`,
+  `docs/SECURITY.md`, `docs/TESTING.md`, `docs/agent-activity-log.md`.
+- **Verification:** `npm run lint` clean, `npm test` **120/120 pass**,
+  `npm run build` OK. SVG sanitizer manually fuzzed against script/onload/
+  external-ref/foreignObject/style-url/DOCTYPE-XXE/CDATA — all neutralized;
+  legitimate SVG still rasterizes. No paid video calls.
+- **Scope note (per new steering):** stopped here on security/infra. Did NOT
+  expand capture hardening further; product work (Product PR A onward) is next.
+- **Branch/PR:** `fix/pr18-corrections` → PR #20 (stacked on #19).
+
+## 2026-10-11 — PR #18 corrections: browser SSRF hardening, selectReference wiring, real tests + E2E proof, avatar-report license fix
 
 - **Asked:** "complete PR #18 — browser-capture security hardening, wire
   `selectReference` into the importer, add real verification tests + an

@@ -1,9 +1,9 @@
 # Self-Hosted AI Presenter — Technical Feasibility Report
 
-_Last updated: 2026-10-09 · Status: RESEARCH ONLY. Nothing in this report is
+_Last updated: 2026-10-11 · Status: RESEARCH ONLY. Nothing in this report is
 implemented in the codebase. No avatar/TTS code has been written or integrated._
 
-> **Correction note (2026-10-09):** an earlier revision of this report stated
+> **Correction note (2026-10-11):** an earlier revision of this report stated
 > "Piper — MIT — commercial-safe" without qualification, and treated MuseTalk's
 > model dependencies as covered by MuseTalk's own MIT license. Both were
 > imprecise. The Piper license situation is forked (archived MIT original vs.
