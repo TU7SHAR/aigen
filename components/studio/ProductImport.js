@@ -99,7 +99,10 @@ export default function ProductImport({ onImported }) {
           body: JSON.stringify({
             product: { ...p, entityType: json.entityType },
             brand: json.brandProfile,
+            design: json.designProfile,
+            entity: json.entityProfile,
             entityType: json.entityType,
+            hasUsableImage: Boolean(p.primaryImage || p.productImages?.length),
           }),
         });
         const cJson = await cRes.json();
@@ -387,7 +390,9 @@ export default function ProductImport({ onImported }) {
                   {chosenConcept === c.id && <Check className="h-4 w-4 text-accent" />}
                   {c.title}
                 </div>
-                <div className="text-xs text-muted">{c.rationale}</div>
+                <div className="text-xs text-muted">
+                  {c.centralMessage || c.objective || c.rationale}
+                </div>
               </button>
             ))}
           </div>

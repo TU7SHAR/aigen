@@ -421,3 +421,42 @@
   durable jobs, spend reservations). The "hybrid" label still maps to the Gemini
   provider — honestly flagged, fixed in PR C.
 - **Branch/PR:** `feat/creative-contract-correctness` → `main`.
+
+## 2026-10-11 — PR 1: de-hardcode creative intelligence (AI-reasoned concepts)
+
+- **Asked:** Stop hardcoding product/creative intelligence (no industry→fixed
+  concept/style/palette tables). Concepts must be AI-reasoned from evidence;
+  selecting one must change the actual prompt; keep a fallback; don't couple to
+  one model; no paid video in dev/tests.
+- **Verified first:** concepts.js had ENTITY_SETS (per-entity fixed concept
+  lists) + SETS (per-brand-style fixed lists) + inferStyleKey (industry keyword
+  regex). promptComposer.conceptMessage had a fixed id→text map. All are exactly
+  the banned pattern.
+- **Did:**
+  - New lib/ai/concepts.js: AI creative-concept generation via the cheap
+    enrichment TEXT model, strict JSON responseSchema, grounded in evidence
+    (entity/offering/benefits/brand/design/objective), explicit no-fabrication
+    rules, graceful degradation. Reports token cost separately.
+  - lib/creative/concepts.js: now `generateConceptsSmart` (AI-first) with a
+    small ENTITY-NEUTRAL deterministic fallback (same generic directions for all
+    industries; only the physical-vs-nonphysical capability boundary differs —
+    a correctness constraint, not a creative decision). Removed ENTITY_SETS /
+    SETS / inferStyleKey.
+  - promptComposer.conceptMessage: PRIMARY path now uses the concept's OWN
+    AI-reasoned fields (centralMessage/visualIdea/proposedSubject); the id→text
+    map is reduced to a tiny generic fallback for deterministic concepts.
+  - /api/creative/concepts: async, passes entity/design/objective/hasUsableImage.
+  - ProductImport: sends richer evidence; renders centralMessage/objective.
+  - Tests updated to assert the NEW contract (entity-neutral fallback; AI concept
+    fields drive the prompt; unknown concept ids still work).
+- **Verified:** lint clean; 72/72 tests pass; build OK. No paid calls.
+- **Honest hardcoding audit (remaining):** lib/creative/templates.js still holds
+  fixed style presets (luxury/bold/minimal lighting+camera) that seed the brief's
+  base art direction. The AI concept's visual direction now overrides the message/
+  subject, but the template still contributes lighting/camera defaults. Fully
+  replacing template-seeded art direction with the AI concept's visual plan is
+  PR 3 (production routing). Flagged, not hidden.
+- **NOT in this PR:** PR 2 (visual intelligence: rendered screenshots,
+  DesignProfile, image verification, SVG, no-image recovery) and PR 3 (real
+  production routing, keyframes, output QA) + PR 4 (durable jobs/spend).
+- **Branch/PR:** `feat/dynamic-creative-intelligence` → `main`.

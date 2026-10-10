@@ -74,14 +74,17 @@ test("benefits/differentiators from profile reach the prompt (grounded)", () => 
 });
 
 test("selected concept genuinely changes the prompt (not just a label)", () => {
-  const howItWorks = compileCreativeRequest(base({ concept: { id: "how-it-works", template: "minimal" } }));
-  const brandIntro = compileCreativeRequest(base({ concept: { id: "brand-intro", template: "minimal" } }));
-  const offerPromo = compileCreativeRequest(base({ concept: { id: "offer", template: "minimal" }, offer: "Free preview", cta: "Start now" }));
-
+  // AI-reasoned concepts carry their own messaging; selecting a different one
+  // must change the prompt.
+  const howItWorks = compileCreativeRequest(
+    base({ concept: { id: "a", title: "How It Works", centralMessage: "convey the step-by-step process", visualIdea: "the real interface in motion", origin: "ai" } })
+  );
+  const brandIntro = compileCreativeRequest(
+    base({ concept: { id: "b", title: "Brand Introduction", centralMessage: "establish positioning and identity", visualIdea: "a confident brand-first reveal", origin: "ai" } })
+  );
   assert.notEqual(howItWorks.finalVideoPrompt, brandIntro.finalVideoPrompt);
-  assert.notEqual(howItWorks.finalVideoPrompt, offerPromo.finalVideoPrompt);
-  assert.match(howItWorks.finalVideoPrompt, /how .* works|step by step/i);
-  assert.match(brandIntro.finalVideoPrompt, /positioning|brand-first/i);
+  assert.match(howItWorks.finalVideoPrompt, /step-by-step process|real interface/i);
+  assert.match(brandIntro.finalVideoPrompt, /positioning and identity|brand-first/i);
 });
 
 test("compiler is deterministic — same input yields identical prompt (preview == generate)", () => {
@@ -89,6 +92,23 @@ test("compiler is deterministic — same input yields identical prompt (preview 
   const a = compileCreativeRequest(input).finalVideoPrompt;
   const b = compileCreativeRequest(input).finalVideoPrompt;
   assert.equal(a, b);
+});
+
+test("AI concept's own fields drive the prompt (not a hardcoded id map)", () => {
+  const c = compileCreativeRequest(
+    base({
+      concept: {
+        id: "whatever-unlisted-id",
+        title: "Birth Chart Reveal",
+        centralMessage: "Show how entering birth details yields personalized guidance",
+        visualIdea: "An elegant celestial chart assembling from the user's inputs",
+        proposedSubject: "the app's real chart interface",
+        origin: "ai",
+      },
+    })
+  );
+  // The dynamic concept text must appear even though the id is unknown to any map.
+  assert.match(c.finalVideoPrompt, /personalized guidance|celestial chart|chart interface/i);
 });
 
 test("financial 'trust-proof' concept forbids inventing results/guarantees", () => {
