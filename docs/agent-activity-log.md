@@ -56,3 +56,47 @@
   Still unverified end-to-end until run with a live key (and the user must
   rotate the key that was pasted into chat).
 - **Branch/PR:** `feat/real-token-usage-cost` → `main`.
+
+## 2026-10-09 — Product URL importer + brand-aware creative pipeline
+
+- **Asked:** Add a product-URL importer (intelligent crawl → ProductProfile +
+  images + brand), and fix poor creative quality (static poster → phone mockup +
+  generic silver background). Make brand an active input so two brands don't get
+  identical ads. Don't spend video credits until the user approves.
+- **Interpreted:** Built on the existing Next.js app. Chose Cheerio + SSRF-safe
+  direct fetch as the default crawler (most commerce pages expose JSON-LD/OG in
+  initial HTML), with a Firecrawl provider behind the same abstraction for
+  JS-heavy sites (opt-in, unverified) — deliberately NOT adding Python/
+  BeautifulSoup. Structured data outranks AI; Gemini is NOT used for factual
+  extraction.
+- **Did:**
+  - Crawler: `lib/crawl/{safeFetch,providers,structured,clean,images,brand,
+    importProduct}.js`. SSRF via DNS resolution + per-redirect re-validation +
+    size/time caps. Structured-first extraction with per-field provenance.
+    Content cleaning (dedupe + relevance scoring). Image discovery/classify/
+    rank/dedupe (thumbnails/icons/badges dropped; largest srcset chosen). Brand
+    signals (intentional colors, logo, tagline). 10-min crawl cache + refresh.
+  - Storage: `lib/assets/store.js` AssetStore abstraction; LocalAssetStore
+    (prototype, content-addressed, documented non-durable) + Supabase stub.
+  - Creative: `lib/creative/{sourceImage,templates,planner,promptComposer,
+    concepts}.js`. Source-image classifier makes posters/ads REFERENCES (fixes
+    poster→phone). Brand-aware CreativeBrief→ScenePlan→professional prompt with
+    negative rules + overlay negative-space. Templates carry real art direction.
+    Brand-adaptive concepts. Brand influence low/balanced/strong.
+  - API: `/api/products/import`, `/api/products/refresh`,
+    `/api/creative/concepts`; `/api/generate` now uses the creative pipeline and
+    returns the internal plan + source-image handling.
+  - UI: `ProductImport.js` (URL → staged status → review: editable fields, hero/
+    gallery selection, brand review with influence + ignore, concept choice →
+    Continue). Studio gains a Create-from URL/Manual switcher and prefill.
+  - Docs: new `docs/CRAWLER.md`, `docs/CREATIVE.md`; updated SECURITY (SSRF),
+    ARCHITECTURE, COSTS, .env.example.
+- **Files affected:** see above + `lib/config.js`, `lib/validation.js`,
+  `components/studio/Studio.js`, `tests/{fixtures,crawl,creative}.test.mjs`.
+- **Impact:** Importing a product performs zero paid calls; user reviews real
+  extracted data and picks a concept before any generation. Poster sources are
+  treated as references; brand palette/tone actively shape the prompt (verified:
+  two brands → different prompts). Lint clean; 26/26 tests pass; build OK;
+  live-route smoke test confirmed the poster-reference + brand-color behavior.
+  `lib/prompts/adPrompt.js` is now superseded by the creative pipeline.
+- **Branch/PR:** `feat/product-url-import-creative-pipeline` → `main`.

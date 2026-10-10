@@ -81,6 +81,26 @@ with a durable job record (see Roadmap).
 (dedup, single concurrency, spend) are **in-memory and reset on restart**. There
 is no durable job store, reservation, or cancellation yet.
 
+## 3b. Product URL importer + creative pipeline (implemented)
+
+Added endpoints (each small and single-purpose):
+
+| Route | Purpose |
+|---|---|
+| `POST /api/products/import` | Crawl + extract → ProductProfile/BrandProfile/assets (no AI, no cost) |
+| `POST /api/products/refresh` | Same, bypassing the crawl cache |
+| `POST /api/creative/concepts` | Brand-adaptive ad concepts (deterministic) |
+| `POST /api/generate` | Now builds the prompt via the creative pipeline |
+
+New library areas: `lib/crawl/*` (SSRF fetch, providers, structured extraction,
+cleaning, images, brand), `lib/assets/store.js` (AssetStore abstraction), and
+`lib/creative/*` (source-image classifier, templates, planner, prompt composer,
+concepts). See `docs/CRAWLER.md` and `docs/CREATIVE.md`.
+
+**Storage note:** imported images are persisted via `LocalAssetStore` to
+`public/imported-assets/` (prototype only). This is **not durable on ephemeral
+serverless disk**; the `SupabaseAssetStore` stub marks the production path.
+
 ## 4. Planned production direction (NOT implemented)
 
 - Auth + tenant scoping; Supabase Postgres with RLS; private object storage.

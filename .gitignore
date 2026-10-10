@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Imported product images (downloaded at runtime by the URL importer).
+# Prototype storage only — not durable on serverless; do not commit.
+/public/imported-assets/

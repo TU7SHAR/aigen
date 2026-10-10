@@ -11,12 +11,27 @@ _Last updated: 2026-10-09_
 - [x] Playback + MP4 download; mock-based unit tests.
 - [ ] **Verify** real generation once with a live key (requires credentials).
 
-## Milestone 2 — Branded, exportable ads
+## Milestone 2 — Product URL importer + creative pipeline (DONE in this PR)
+
+- [x] Product URL import: SSRF-safe crawl, structured-first extraction,
+      content cleaning, image discovery/ranking/dedupe, brand-signal extraction.
+- [x] ProductProfile + BrandProfile with per-field provenance + warnings.
+- [x] AssetStore abstraction (local prototype store; Supabase stub).
+- [x] Crawl provider abstraction (DirectFetch default; Firecrawl opt-in).
+- [x] Review UX (edit fields, choose hero, remove images, brand review, concepts).
+- [x] Brand-aware creative pipeline: source-image classification (fixes
+      poster→phone), CreativeBrief → ScenePlan → professional prompt + negatives.
+- [x] Brand-adaptive concepts; brand influence low/balanced/strong.
+- [ ] Firecrawl path **verified** with a live key (opt-in, currently unverified).
+
+## Milestone 3 — Branded, exportable ads
 
 - [ ] Remotion compositing: exact logo, price, CTA and captions over the AI
-      footage (preferred over asking the model to render text).
+      footage (the prompt already reserves negative space for this).
 - [ ] Multiple hooks / variants from one product in a batch.
 - [ ] First/last-frame interpolation and video extension (Omni features).
+- [ ] Product fidelity: segmentation / masks / first-frame compositing (experimental).
+- [ ] Optional Gemini enrichment (benefits/angles/tone, vision classification).
 
 ## Milestone 3 — Persistence & accounts
 
