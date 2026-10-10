@@ -16,7 +16,9 @@
 
 import { NextResponse } from "next/server";
 import { generateRequestSchema } from "@/lib/validation.js";
-import { buildAdPrompt } from "@/lib/prompts/adPrompt.js";
+import { buildCreativePlan } from "@/lib/creative/planner.js";
+import { composeVideoPrompt } from "@/lib/creative/promptComposer.js";
+import { classifySourceImageHeuristic } from "@/lib/creative/sourceImage.js";
 import { getVideoProvider, ProviderError } from "@/lib/ai/index.js";
 import {
   isPaidGenerationEnabled,
@@ -128,20 +130,55 @@ export async function POST(request) {
     }
   }
 
-  // 5. Build prompt
+  // 5. Build prompt via the brand-aware creative pipeline:
+  //    source-image class → CreativeBrief → ScenePlan → professional prompt.
+  //    (A user prompt override still wins when supplied.)
+  const product = {
+    name: input.productName,
+    brand: input.brand || input.productProfile?.brand || undefined,
+    description: input.description || input.productProfile?.description,
+    category: input.productProfile?.category,
+    targetCustomer: input.productProfile?.targetCustomer,
+    ...(input.productProfile || {}),
+  };
+  const brand = input.brandProfile || null;
+
+  // Classify the source image so a poster/ad/collage is treated as a
+  // REFERENCE rather than literally animated (the key quality fix).
+  const sourceImage = input.image
+    ? classifySourceImageHeuristic({
+        role: input.sourceImageMeta?.role,
+        url: input.sourceImageMeta?.url,
+        hintText: input.sourceImageMeta?.hintText,
+      })
+    : undefined;
+
+  const { brief, scenePlan } = buildCreativePlan({
+    product,
+    brand,
+    template: input.template,
+    durationSeconds: input.durationSeconds,
+    aspectRatio: input.aspectRatio,
+    sourceImage,
+    brandInfluence: input.brandInfluence,
+    userIntent: input.userIntent,
+  });
+
+  const composed = composeVideoPrompt({
+    brief,
+    scenePlan,
+    product,
+    brand,
+    sourceImage,
+    aspectRatio: input.aspectRatio,
+    offer: input.offer,
+    cta: input.cta,
+  });
+
   const prompt =
     input.promptOverride && input.promptOverride.length > 0
       ? input.promptOverride
-      : buildAdPrompt({
-          productName: input.productName,
-          brand: input.brand,
-          description: input.description,
-          offer: input.offer,
-          cta: input.cta,
-          template: input.template,
-          durationSeconds: input.durationSeconds,
-          hasImage: Boolean(input.image),
-        });
+      : composed.prompt;
 
   // 6. Generate
   activeGenerations += 1;
@@ -172,6 +209,14 @@ export async function POST(request) {
     return NextResponse.json({
       ok: true,
       prompt,
+      // Surface the internal creative plan + source-image handling for
+      // transparency/debugging (helps show WHY a poster didn't become a phone).
+      creative: {
+        brief,
+        scenePlan,
+        sourceImage: sourceImage || null,
+        negativePrompt: composed.negativePrompt,
+      },
       mock: result.mock,
       provider: result.provider,
       model: result.model,

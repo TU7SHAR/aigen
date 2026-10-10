@@ -86,6 +86,23 @@ scaling.
   AI-generate every second. Turning one ~$0.80 clip into a finished ad with
   cheap overlays/stills is where margin improves.
 
+## Cost surfaces across the pipeline
+
+The importer + creative pipeline exist partly to spend video credits wisely.
+Which steps can incur cost:
+
+| Operation | Cost |
+|---|---|
+| Crawl + structured extraction + cleaning + image ranking + brand signals | **$0** (deterministic, no AI) |
+| Ad concepts (`/api/creative/concepts`) | **$0** (deterministic) |
+| Image download + local storage | **$0** (bandwidth only) |
+| Firecrawl crawl (only if enabled) | Firecrawl per-request cost (off by default) |
+| Optional Gemini enrichment (future, not wired) | Gemini **text/vision** tokens |
+| Video generation (`/api/generate`) | Gemini **video** tokens (the expensive meter) |
+
+No paid video call happens on import — the user must explicitly click Generate.
+Automated tests use fixtures/mocks and incur **no** Firecrawl/Gemini cost.
+
 ## Recommended first live test
 
 Generate **one** short clip (3–5 s, 720p), then compare the reported `cost`

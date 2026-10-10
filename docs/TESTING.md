@@ -32,6 +32,34 @@ cost**).
 | `npm run lint` | 0 errors (1 justified `<img>` warning suppressed) |
 | `npm run build` | success; `/`, `/studio` static, `/api/generate` dynamic |
 
+## Crawler + creative tests (added for the importer milestone)
+
+`tests/crawl.test.mjs` and `tests/creative.test.mjs` (fixtures in
+`tests/fixtures.mjs`) — all run on HTML fixtures / pure functions, **no network,
+no Firecrawl, no Gemini, no cost**:
+
+- Structured JSON-LD populates product fields (with provenance).
+- No-structured-data page still extracts from DOM/meta + warns.
+- Content cleaning strips nav/footer noise and dedupes repeated blocks.
+- High-res gallery image outranks a tiny icon; payment/star icons dropped.
+- Duplicate size-variants of one asset are deduped.
+- Brand extraction finds intentional colors (ignores white) + logo + confidence.
+- SSRF: private/loopback/metadata IPs blocked; non-http + localhost rejected;
+  normal public https allowed.
+- Source image: poster/ad → reference; clean packshot → product hero.
+- Prompt: poster source forbids phones/poster-in-frame and includes brand color.
+- Prompt: two brands, same product → different art direction.
+- Prompt with no brand → explicitly avoids generic "AI silver".
+- Concepts: luxury vs. playful brands get different concept sets.
+
+**Last run (2026-10-09): 26/26 passing** (10 prior + 16 new).
+
+Live smoke test (mock provider): importer pipeline on a fixture extracted
+name/brand/price, ranked the hero image, found brand colors + logo, stripped
+footer noise; `/api/creative/concepts` returned luxury concepts; `/api/generate`
+with a poster source returned `treatAsReference: true` and a prompt that forbids
+phones and includes the brand color.
+
 ## NOT yet verified
 
 - **Real Gemini Omni Flash generation** against a live key. The integration is

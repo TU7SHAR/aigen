@@ -34,6 +34,28 @@ _Last updated: 2026-10-09_
 - **No data-retention / deletion workflow** (videos are returned inline, not
   stored, in this prototype).
 
+## Crawler SSRF protection (product URL importer)
+
+The `/api/products/import` and `/refresh` endpoints fetch user-supplied URLs,
+so SSRF protection is enforced in `lib/crawl/safeFetch.js`:
+
+- **http/https only** — `file://`, `ftp://`, etc. are rejected.
+- **DNS-resolution-based blocking** (not just string matching): the hostname is
+  resolved and every resulting address is checked. This blocks a public name
+  that resolves to an internal address (e.g. `evil.com → 127.0.0.1`).
+- Blocked ranges: loopback (`127.0.0.0/8`, `::1`), private (`10/8`,
+  `172.16/12`, `192.168/16`), link-local + cloud metadata (`169.254/16`,
+  incl. `169.254.169.254`), CGNAT (`100.64/10`), IPv6 unique-local (`fc/fd`)
+  and link-local (`fe80`), multicast/reserved, and IPv4-mapped IPv6.
+- **Redirects are followed manually** and every hop is re-validated against the
+  same rules; redirect count is capped (≤4).
+- **Response size cap** (streamed; aborts if exceeded) and **request timeout**.
+- Image downloads for the asset store go through the same `safeFetch`.
+- `FIRECRAWL_API_KEY` (if used) stays server-side only.
+
+Covered by tests in `tests/crawl.test.mjs` (private/metadata IPs, non-http
+schemes, localhost).
+
 ## Prelaunch checklist (before any public/paid traffic)
 
 - [ ] Authenticated sessions + per-tenant authorization on all endpoints.

@@ -9,14 +9,17 @@ import {
   Sparkles,
   ImageIcon,
   Info,
+  Link2,
 } from "lucide-react";
+import ProductImport from "./ProductImport.js";
 
 const TEMPLATES = [
-  { id: "luxury", label: "Luxury Reveal", hint: "Premium, cinematic" },
-  { id: "bold", label: "Bold & Punchy", hint: "High energy" },
-  { id: "minimal", label: "Clean Studio", hint: "Modern, neutral" },
+  { id: "luxury", label: "Luxury Studio", hint: "Premium, cinematic" },
+  { id: "bold", label: "Bold Performance", hint: "High energy" },
+  { id: "minimal", label: "Minimal Hero", hint: "Modern, neutral" },
   { id: "product-demo", label: "Product Demo", hint: "Show features" },
   { id: "problem-solution", label: "Problem → Solution", hint: "Narrative" },
+  { id: "lifestyle", label: "Lifestyle", hint: "Natural setting" },
 ];
 const RATIOS = [
   { id: "9:16", label: "9:16 Portrait" },
@@ -62,6 +65,32 @@ export default function Studio() {
   const [result, setResult] = useState(null);
   const fileInputRef = useRef(null);
   const inFlight = useRef(false);
+
+  // Create-from mode: "url" (import) or "manual" (upload). Imported context is
+  // carried into generation so the creative pipeline can use the brand.
+  const [mode, setMode] = useState("url");
+  const [imported, setImported] = useState(null); // { productProfile, brandProfile, brandInfluence }
+  const [importedImages, setImportedImages] = useState([]); // hero + gallery urls
+
+  const handleImported = useCallback((payload) => {
+    setImported({
+      productProfile: payload.productProfile,
+      brandProfile: payload.brandProfile,
+      brandInfluence: payload.brandInfluence,
+    });
+    setImportedImages(
+      [payload.heroUrl, ...(payload.gallery || [])].filter(Boolean)
+    );
+    setForm((f) => ({
+      ...f,
+      productName: payload.form.productName || f.productName,
+      brand: payload.form.brand || f.brand,
+      description: payload.form.description || f.description,
+      offer: payload.form.offer || f.offer,
+      template: payload.form.template || f.template,
+    }));
+    setMode("manual"); // reveal the full editor, prefilled
+  }, []);
 
   // Fetch provider/paid status for honest UI messaging.
   useEffect(() => {
@@ -150,6 +179,14 @@ export default function Studio() {
       image: image ? { data: image.base64, mimeType: image.mimeType } : undefined,
       promptOverride: editingPrompt ? promptPreview : undefined,
       clientRequestId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      // Carry imported product/brand context into the creative pipeline.
+      productProfile: imported?.productProfile || undefined,
+      brandProfile: imported?.brandProfile || undefined,
+      brandInfluence: imported?.brandInfluence || "balanced",
+      // Hint the source-image classifier (e.g. imported poster/ad vs packshot).
+      sourceImageMeta: image
+        ? { hintText: image.name, url: image.name }
+        : undefined,
     };
     const downloadName = `adforge-${Date.now()}.mp4`;
 
@@ -208,9 +245,50 @@ export default function Studio() {
         </div>
       )}
 
+      {/* Create-from mode switcher */}
+      <div className="mb-6">
+        <div className="mb-3 text-sm font-medium text-zinc-500">Create from</div>
+        <div className="inline-flex rounded-xl border border-zinc-200 p-1 dark:border-zinc-800">
+          <button
+            onClick={() => setMode("url")}
+            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition ${
+              mode === "url" ? "bg-indigo-600 text-white" : "text-zinc-600 dark:text-zinc-300"
+            }`}
+          >
+            <Link2 className="h-4 w-4" /> Product URL
+          </button>
+          <button
+            onClick={() => setMode("manual")}
+            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition ${
+              mode === "manual" ? "bg-indigo-600 text-white" : "text-zinc-600 dark:text-zinc-300"
+            }`}
+          >
+            <Upload className="h-4 w-4" /> Upload manually
+          </button>
+        </div>
+      </div>
+
+      {mode === "url" ? (
+        <ProductImport onImported={handleImported} />
+      ) : (
       <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
         {/* LEFT: form */}
         <div className="space-y-6">
+          {imported && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+              Imported from URL{imported.brandProfile?.name ? ` · brand: ${imported.brandProfile.name}` : ""}
+              {imported.brandProfile ? ` · brand influence: ${imported.brandInfluence}` : " · no brand detected"}.
+              Fields are prefilled below — edit anything before generating.
+              {importedImages.length > 0 && (
+                <div className="mt-2 flex gap-2 overflow-x-auto">
+                  {importedImages.slice(0, 6).map((u) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={u} src={u} alt="" className="h-14 w-14 shrink-0 rounded border border-emerald-200 object-contain" />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {/* Upload */}
           <section>
             <label className="mb-2 block text-sm font-medium">Product image</label>
@@ -479,6 +557,7 @@ export default function Studio() {
           )}
         </aside>
       </div>
+      )}
     </div>
   );
 }
