@@ -1,6 +1,6 @@
 # Visual Intelligence & Entity-Aware Creative
 
-_Last updated: 2026-10-11_
+_Last updated: 2026-10-09_
 
 ## Why this exists
 
@@ -95,19 +95,46 @@ See `docs/ROADMAP.md` for sequencing.
   typography families, shape hints, with provenance + confidence. If no palette
   exists it reports `detected:false` and **does not invent one**. The importer
   returns `designProfile`; brand colors now prefer it.
-- **Relevance-based reference selection** (`lib/assets/selectReference.js`): an
-  icon/logo is **never** chosen as the primary scene reference; selection depends
-  on entity type (physical → product shot; SaaS → UI screenshot; brand → hero
-  visual). A logo-only site yields "no scene primary" (logo kept for an
-  end-card overlay).
+- **Relevance-based reference selection** (`lib/assets/selectReference.js`,
+  **now wired into `lib/crawl/importProduct.js`**): an icon/logo is **never**
+  chosen as the primary scene reference; selection depends on entity type
+  (physical → product shot; SaaS → UI screenshot; brand → hero visual). A
+  logo-only site yields "no scene primary" (logo kept for an end-card overlay).
+  The importer calls `selectReference(assets, { entityType })` and exposes the
+  result as `primaryReferenceRole`; `primaryImage` now resolves from the chosen
+  reference (`storedUrl` → `sourceUrl` → hero fallback) instead of blindly
+  taking the first hero asset. *Live-verified*: a wikipedia.org import selected
+  `website_hero` as the primary reference (not an icon).
+- **Reference resolution for generation** (`lib/assets/resolveReference.js`):
+  `resolveReferenceAsset(url)` was extracted out of the generate route into a
+  reusable module. It reads locally-stored assets from `/imported-assets/` via
+  `path.basename` (anti-traversal), fetches `http(s)` references through the
+  SSRF-safe fetcher, and returns `null` for SVG (raster models can't consume it
+  directly). `app/api/generate/route.js` imports this instead of inlining it.
+- **Pure image validation** (`lib/assets/verify.js` → `validateImageBuffer`):
+  the decode/dimension/size checks were extracted into a pure
+  `validateImageBuffer(raw, mime, opts)` that operates on an in-memory buffer,
+  so they can be unit-tested without a network fetch (`verifyImageUrl` is
+  SSRF-blocked against loopback, which is correct, but made buffer-level tests
+  impossible before).
 
-### Implemented but UNVERIFIED (needs a browser host)
+### Implemented (browser capture now exercised + hardened)
 - **Rendered screenshots + computed-style capture** (`lib/design/screenshot.js`):
   a Playwright provider behind an interface, **opt-in** via
-  `ENABLE_RENDERED_CAPTURE=true`. Playwright is **not installed** in CI and the
-  app does **not** depend on it — when absent it returns `{available:false}` and
-  we fall back to HTML/CSS design extraction. The capture code is written against
-  the Playwright API but has not been exercised with a live browser here.
+  `ENABLE_RENDERED_CAPTURE=true`. The app does **not** depend on it — when the
+  browser/Playwright is absent it returns `{available:false}` and we fall back to
+  HTML/CSS design extraction. It has now been exercised with a live Chromium
+  (produced a real ~58KB screenshot) and **security-hardened**:
+  - **Per-subrequest SSRF guard** — every resource the page tries to load is
+    checked (`isSubrequestAllowed`: DNS-resolve the host, then `isBlockedIp` on
+    the resolved address), so a page can't pivot the browser to
+    `169.254.169.254`, `127.0.0.1`, or private ranges via a redirect/subresource.
+    *Verified*: blocks the cloud metadata IP, loopback and `10.x`; allows public
+    hosts; a legitimate capture still succeeds.
+  - **Hard resource limits** — `{ maxRequests: 150, maxTotalBytes: 25MB,
+    maxCaptureMs: 30000 }`, `waitUntil: "domcontentloaded"` + a 1200ms settle,
+    `acceptDownloads: false`, and a capture-deadline timeout, to bound a hostile
+    or runaway page.
 
 ### NOT yet implemented (honest)
 - Multi-image upload / per-asset role tagging / extra-context field inside the

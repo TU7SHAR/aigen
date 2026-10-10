@@ -1,5 +1,77 @@
 # Agent activity log
 
+## 2026-10-09 — PR #18 corrections: browser SSRF hardening, selectReference wiring, real tests + E2E proof, avatar-report license fix
+
+- **Asked:** "complete PR #18 — browser-capture security hardening, wire
+  `selectReference` into the importer, add real verification tests + an
+  end-to-end mock-provider proof, and correct the avatar report (Piper is not
+  plainly MIT — OHF Piper is GPL-3.0; audit MuseTalk's dependency licenses;
+  distinguish benchmarks from measurements; don't call MuseTalk+Piper
+  production-ready without a benchmarked PoC)."
+- **Interpreted:** PR #18 landed the visual-intelligence building blocks but left
+  gaps: (1) `selectReference` existed but nothing called it, so the importer
+  could still pick an icon as the primary scene reference; (2) the rendered-
+  screenshot capture had no per-subresource SSRF guard or resource limits;
+  (3) the only "tests" exercised code paths that are SSRF-blocked against
+  loopback, so there was no real buffer-level verification test and no proof a
+  selected reference actually reaches the generation provider; (4) the avatar
+  feasibility report overstated license cleanliness ("Piper = MIT",
+  "MuseTalk = MIT") and blurred public benchmarks with measured results.
+- **Did:**
+  - **Wired `selectReference` into `lib/crawl/importProduct.js`**: the importer
+    now calls `selectReference(assets, { entityType })`, exposes
+    `primaryReferenceRole`, and resolves `primaryImage` from the chosen
+    reference (`storedUrl` → `sourceUrl` → hero fallback) instead of the first
+    hero asset. Added `illustration` and `website_hero` to `webRoles`.
+  - **Hardened `lib/design/screenshot.js`**: per-subrequest SSRF guard
+    (`isSubrequestAllowed` = DNS-resolve + `isBlockedIp` on every resource the
+    page loads), plus hard limits (`maxRequests:150`, `maxTotalBytes:25MB`,
+    `maxCaptureMs:30000`), `waitUntil:"domcontentloaded"` + 1200ms settle,
+    `acceptDownloads:false`, and a capture-deadline timeout. Imports `dns`,
+    `net`, `isBlockedIp`.
+  - **Extracted pure `validateImageBuffer(raw, mime, opts)`** from
+    `verifyImageUrl` in `lib/assets/verify.js` so decode/size/dimension checks
+    are unit-testable without a (SSRF-blocked) network fetch.
+  - **Extracted `lib/assets/resolveReference.js`** (`resolveReferenceAsset`)
+    from the generate route — local `/imported-assets/` read via
+    `path.basename` anti-traversal, SSRF-safe fetch for `http(s)`, `null` for
+    SVG; `app/api/generate/route.js` now imports it and dropped the inlined
+    copy + unused `fs`/`path`/`safeFetch` imports.
+  - **Mock provider now echoes `receivedRequest`** (`lib/ai/mockProvider.js`:
+    hasImage, imageMimeType, imageBytesApprox, promptPreview, aspectRatio,
+    durationSeconds) and the generate route surfaces it, giving an auditable
+    proof that the resolved reference image reached the provider.
+  - **Added real tests**: `tests/verify-live.test.mjs` (8, buffer-level via
+    `validateImageBuffer`) and `tests/generate-reference-e2e.test.mjs` (5,
+    lib-level E2E proving a selected reference reaches the mock provider).
+  - **Corrected `docs/AVATAR_FEASIBILITY.md`**: Piper is forked — archived
+    `rhasspy/piper` (MIT) vs maintained `OHF-Voice/piper1-gpl` (**GPL-3.0**,
+    because it embeds GPL espeak-ng) vs `piper-plus` (MIT, no espeak-ng);
+    added a MuseTalk dependency-license audit (code MIT, but it auto-downloads
+    sd-vae-ft-mse / whisper-tiny / DWPose / face-parsing weights, each with its
+    own license — mostly MIT/Apache per MuseTalk's LICENSE, but must be checked
+    per pinned weight); relabelled all FPS/VRAM/$ figures as public benchmarks
+    or estimates (not measured on our hardware); and stated MuseTalk+TTS is NOT
+    production-ready until a benchmarked presenter-video PoC exists.
+- **Files affected:** `lib/crawl/importProduct.js`, `lib/design/screenshot.js`,
+  `lib/assets/verify.js`, `lib/assets/resolveReference.js` (new),
+  `app/api/generate/route.js`, `lib/ai/mockProvider.js`,
+  `tests/verify-live.test.mjs` (new), `tests/generate-reference-e2e.test.mjs`
+  (new), `docs/AVATAR_FEASIBILITY.md`, `docs/VISUAL_INTELLIGENCE.md`,
+  `docs/agent-activity-log.md`.
+- **Impact:** The importer can no longer promote an icon/logo to the primary
+  scene reference; the opt-in browser capture is SSRF-hardened and resource-
+  bounded; verification and reference→provider wiring are now covered by real
+  tests (105/105 pass); and the avatar report is honest about licensing and
+  about the benchmark-vs-measured distinction. No paid video calls were made.
+- **Verification:** `npm run lint` clean, `npm test` 105/105 pass,
+  `npm run build` OK. Live proof: wikipedia.org import → entity `business`,
+  `primaryReferenceRole: website_hero` (not an icon), 4 assets kept / 0
+  rejected; generate (mock) with that reference →
+  `receivedRequest.hasImage: true`, `mime: image/png`, `bytes: 189402`.
+- **Branch/PR:** `fix/pr18-corrections`, stacked on
+  `feat/enable-rendered-screenshots` (PR #19).
+
 ## 2026-10-11 — MakeAdClips brand identity: favicon, logo mark, icons & metadata
 
 - **Asked:** "add favicon and all related to brand identity … the brand is not
