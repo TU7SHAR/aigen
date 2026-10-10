@@ -96,9 +96,14 @@ Which steps can incur cost:
 | Crawl + structured extraction + cleaning + image ranking + brand signals | **$0** (deterministic, no AI) |
 | Ad concepts (`/api/creative/concepts`) | **$0** (deterministic) |
 | Image download + local storage | **$0** (bandwidth only) |
-| Firecrawl crawl (only if enabled) | Firecrawl per-request cost (off by default) |
-| Optional Gemini enrichment (future, not wired) | Gemini **text/vision** tokens |
+| Firecrawl crawl (only when it falls back / is forced) | Firecrawl per-request cost |
+| **AI source enrichment** (`/api/products/import`) | Gemini **TEXT** tokens (cheap Flash-Lite); tracked separately via `recordEnrichmentSpend` |
 | Video generation (`/api/generate`) | Gemini **video** tokens (the expensive meter) |
+
+Enrichment cost is reported per-import under `aiEnrichment.cost` and accumulated
+separately from video spend, so the cheap "understand the source" stage and the
+expensive "generate video" stage are never bundled together. Automated tests
+run enrichment disabled / on fixtures → **no** Gemini or Firecrawl cost.
 
 No paid video call happens on import — the user must explicitly click Generate.
 Automated tests use fixtures/mocks and incur **no** Firecrawl/Gemini cost.

@@ -1,12 +1,15 @@
 /**
- * POST /api/products/import  — import a product from a URL.
+ * POST /api/products/import  — import ANY source (product/SaaS/business/creator)
+ *                              from a URL. Bare domains like "bhavishai.in" are
+ *                              accepted and normalized to https before crawling.
  * POST /api/products/refresh — same, forcing a fresh crawl (bypass cache).
  *
  * Input:  { url: string, refresh?: boolean }
- * Output: { productProfile, brandProfile, assets, extractionWarnings, observability }
+ * Output: rich Source-Intelligence result (see lib/crawl/importProduct.js).
  *
- * This endpoint performs NO paid video generation and (by default) NO Gemini
- * call — it only crawls + extracts. SSRF protection lives in lib/crawl/safeFetch.
+ * This endpoint performs NO paid VIDEO generation. It may make a cheap Gemini
+ * TEXT enrichment call (tracked separately). SSRF protection lives in
+ * lib/crawl/safeFetch; URL normalization in lib/crawl/normalizeUrl.
  */
 
 import { NextResponse } from "next/server";
@@ -16,8 +19,10 @@ import { CrawlError } from "@/lib/crawl/safeFetch.js";
 
 export const maxDuration = 60;
 
+// NOTE: we accept a loose string (NOT z.string().url()) so "bhavishai.in"
+// without a scheme is not rejected with a 422. normalizeInputUrl handles it.
 const schema = z.object({
-  url: z.string().url().max(2000),
+  url: z.string().trim().min(3).max(2000),
   refresh: z.boolean().optional().default(false),
 });
 

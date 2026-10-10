@@ -11,12 +11,26 @@ import {
 } from "lucide-react";
 
 const STAGES = [
-  "Reading product page…",
-  "Finding product details…",
-  "Collecting product images…",
-  "Analyzing brand…",
-  "Preparing your ad workspace…",
+  "Normalizing URL…",
+  "Opening website…",
+  "Understanding what this is…",
+  "Collecting visual assets…",
+  "Building profile…",
 ];
+
+const ENTITY_LABELS = {
+  ecommerce_product: "Product",
+  ecommerce_store: "Online Store",
+  saas: "SaaS / Software",
+  service: "Service",
+  business: "Business",
+  creator: "Creator / Personal Brand",
+  portfolio: "Portfolio",
+  course: "Course",
+  app: "App",
+  landing_page: "Landing Page",
+  unknown: "Website / Business",
+};
 
 /**
  * URL import flow: paste URL -> crawl -> review extracted ProductProfile +
@@ -73,15 +87,27 @@ export default function ProductImport({ onImported }) {
       setHeroUrl(p.primaryImage || p.productImages?.[0] || null);
       setRemoved(new Set());
 
-      // fetch concepts (deterministic, no cost)
-      const cRes = await fetch("/api/creative/concepts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product: p, brand: json.brandProfile }),
-      });
-      const cJson = await cRes.json();
-      setConcepts(cJson.concepts || []);
-      setChosenConcept(cJson.concepts?.[0]?.id || null);
+      // Only generate concepts once we understand the entity well enough.
+      // Below the threshold we ask the user to review first (no generic
+      // "Product Demo / Lifestyle" guesses for something we didn't understand).
+      const confidence = json.extractionConfidence ?? 0;
+      if (confidence >= 0.45) {
+        const cRes = await fetch("/api/creative/concepts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            product: { ...p, entityType: json.entityType },
+            brand: json.brandProfile,
+            entityType: json.entityType,
+          }),
+        });
+        const cJson = await cRes.json();
+        setConcepts(cJson.concepts || []);
+        setChosenConcept(cJson.concepts?.[0]?.id || null);
+      } else {
+        setConcepts([]);
+        setChosenConcept(null);
+      }
       setPhase("review");
     } catch (e) {
       clearInterval(timer);
@@ -103,9 +129,10 @@ export default function ProductImport({ onImported }) {
     const concept = concepts.find((c) => c.id === chosenConcept);
     const gallery = (p.productImages || []).filter((u) => !removed.has(u));
     onImported({
-      productProfile: { ...p, ...edits, primaryImage: heroUrl },
+      productProfile: { ...p, ...edits, entityType: data.entityType, primaryImage: heroUrl },
       brandProfile: ignoreBrand ? null : data.brandProfile,
       brandInfluence,
+      entityType: data.entityType,
       concept,
       heroUrl,
       gallery,
@@ -114,7 +141,7 @@ export default function ProductImport({ onImported }) {
         brand: edits.brand,
         description: edits.description,
         offer: edits.offer,
-        template: concept?.template || "luxury",
+        template: concept?.template || "minimal",
       },
     });
   }
@@ -182,8 +209,28 @@ export default function ProductImport({ onImported }) {
   const obs = data.observability || {};
   const gallery = p.productImages || [];
 
+  const conf = data.extractionConfidence ?? p.extractionConfidence ?? 0;
+  const lowConf = conf < 0.45;
+
   return (
     <div className="space-y-6">
+      {/* What we understood this as */}
+      <div className="card p-4">
+        <div className="eyebrow mb-1">We understood this as</div>
+        <div className="flex items-center gap-2">
+          <span className="text-accent">◩</span>
+          <span className="text-lg font-semibold">{ENTITY_LABELS[data.entityType] || "Website / Business"}</span>
+          <span className="mono-meta ml-auto">CONF {conf.toFixed(2)}</span>
+        </div>
+        {lowConf && (
+          <p className="mt-2 text-sm text-muted">
+            We found some information but couldn&apos;t confidently identify
+            everything. Please review the fields below before continuing — we
+            won&apos;t suggest ad concepts until this looks right.
+          </p>
+        )}
+      </div>
+
       {warnings.length > 0 && (
         <div className="card px-4 py-3 text-sm text-ink" style={{ borderLeft: "3px solid var(--accent)" }}>
           <div className="mono-meta !text-accent mb-1">Review before generating</div>
@@ -309,10 +356,17 @@ export default function ProductImport({ onImported }) {
         </div>
       )}
 
-      {/* concepts */}
+      {/* concepts gated on confidence */}
+      {concepts.length === 0 && (
+        <div className="card px-4 py-3 text-sm text-muted">
+          Ad concepts will appear once the details above look right. Edit the
+          fields, then continue — we&apos;ll tailor concepts to a{" "}
+          <b>{(ENTITY_LABELS[data.entityType] || "business").toLowerCase()}</b>.
+        </div>
+      )}
       {concepts.length > 0 && (
         <div>
-          <span className="mb-2 block text-sm font-medium">Choose an ad concept</span>
+          <span className="eyebrow mb-2 block">Choose an ad concept</span>
           <div className="grid gap-2 sm:grid-cols-2">
             {concepts.map((c) => (
               <button
@@ -339,6 +393,34 @@ export default function ProductImport({ onImported }) {
       >
         Continue to Ad Studio →
       </button>
+
+      {/* Dev-only debug panel (hidden in production) */}
+      {process.env.NODE_ENV !== "production" && (
+        <details className="card px-4 py-3 text-xs text-muted">
+          <summary className="mono-meta cursor-pointer">Debug · import internals</summary>
+          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+            <span>Input → {data.normalizedInputUrl}</span>
+            <span>Final → {data.finalUrl}</span>
+            <span>Crawler: {obs.crawlProvider}{obs.usedFirecrawl ? " (firecrawl)" : ""}</span>
+            <span>Product schema: {obs.hasProductSchema ? "yes" : "no"}</span>
+            <span>Pages: {(data.pagesUsed || []).length}</span>
+            <span>Images: {obs.candidateImageCount} → {obs.keptImageCount}</span>
+            <span>AI enrich: {data.aiEnrichment?.used ? data.aiEnrichment.model : "no"}</span>
+            <span>Confidence: {conf.toFixed(2)}</span>
+            {obs.sizeTrace && (
+              <>
+                <span>Raw HTML: {obs.sizeTrace.rawHtmlChars} ch</span>
+                <span>Cleaned: {obs.sizeTrace.cleanedChars} ch</span>
+                <span>AI input: {obs.sizeTrace.semanticInputChars} ch</span>
+                <span>
+                  Enrich tokens: {data.aiEnrichment?.inputTokens ?? "—"}/
+                  {data.aiEnrichment?.outputTokens ?? "—"}
+                </span>
+              </>
+            )}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

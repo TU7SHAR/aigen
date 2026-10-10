@@ -19,6 +19,10 @@ import { generateRequestSchema } from "@/lib/validation.js";
 import { buildCreativePlan } from "@/lib/creative/planner.js";
 import { composeVideoPrompt } from "@/lib/creative/promptComposer.js";
 import { classifySourceImageHeuristic } from "@/lib/creative/sourceImage.js";
+import {
+  compileGenerationContext,
+  contextSize,
+} from "@/lib/creative/generationContext.js";
 import { getVideoProvider, ProviderError } from "@/lib/ai/index.js";
 import {
   isPaidGenerationEnabled,
@@ -180,6 +184,19 @@ export async function POST(request) {
       ? input.promptOverride
       : composed.prompt;
 
+  // Compile the MINIMAL generation context (not the whole profile/crawl). This
+  // is what a future multi-input pipeline/Remotion step should consume; we also
+  // return it so context-reduction is measurable.
+  const generationContext = compileGenerationContext({
+    entityType: input.productProfile?.entityType || input.entityType,
+    profile: product,
+    brand,
+    heroAsset: input.productProfile?.primaryImage || null,
+    sourceType: sourceImage?.type || null,
+    concept: input.concept || null,
+    brief,
+  });
+
   // 6. Generate
   activeGenerations += 1;
   rememberRequest(input.clientRequestId);
@@ -216,6 +233,8 @@ export async function POST(request) {
         scenePlan,
         sourceImage: sourceImage || null,
         negativePrompt: composed.negativePrompt,
+        generationContext,
+        generationContextChars: contextSize(generationContext),
       },
       mock: result.mock,
       provider: result.provider,

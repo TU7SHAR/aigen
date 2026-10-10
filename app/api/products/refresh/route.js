@@ -10,7 +10,9 @@ import { CrawlError } from "@/lib/crawl/safeFetch.js";
 
 export const maxDuration = 60;
 
-const schema = z.object({ url: z.string().url().max(2000) });
+// Loose string (not z.string().url()) so bare domains work; normalizeInputUrl
+// handles scheme/validation inside the orchestrator.
+const schema = z.object({ url: z.string().trim().min(3).max(2000) });
 
 export async function POST(request) {
   let body;
