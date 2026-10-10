@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ---
 
-# AdForge Studio — instructions for coding agents
+# MakeAdClips Studio — instructions for coding agents
 
 > Keep the auto-managed `nextjs-agent-rules` block above intact — `next dev`
 > re-adds it; committing it with your work keeps the tree clean.

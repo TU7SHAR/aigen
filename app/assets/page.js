@@ -1,7 +1,7 @@
 import ComingSoon from "@/components/layout/ComingSoon.js";
 
 export const metadata = {
-  title: "Assets — AdForge",
+  title: "Assets — MakeAdClips",
   description: "Imported product images and generated videos.",
 };
 

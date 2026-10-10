@@ -1,4 +1,4 @@
-# Costs — AdForge Studio
+# Costs — MakeAdClips Studio
 
 _Last updated: 2026-10-09_
 

@@ -12,7 +12,7 @@ export default function Home() {
           <span className="text-accent">professional</span> video ad.
         </h1>
         <p className="mt-5 max-w-xl text-base text-muted sm:mt-6 sm:text-lg">
-          AdForge Studio reads your product page, understands your brand, plans
+          MakeAdClips Studio reads your product page, understands your brand, plans
           the concept, and generates a commercial-grade ad with Google&apos;s
           Gemini — not a generic AI template.
         </p>

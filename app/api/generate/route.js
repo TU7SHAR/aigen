@@ -14,16 +14,47 @@
  * within the plan's execution limit (documented in docs/ARCHITECTURE.md).
  */
 
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import { generateRequestSchema } from "@/lib/validation.js";
-import { buildCreativePlan } from "@/lib/creative/planner.js";
-import { composeVideoPrompt } from "@/lib/creative/promptComposer.js";
-import { classifySourceImageHeuristic } from "@/lib/creative/sourceImage.js";
-import {
-  compileGenerationContext,
-  contextSize,
-} from "@/lib/creative/generationContext.js";
+import { compileCreativeRequest } from "@/lib/creative/compile.js";
 import { getVideoProvider, ProviderError } from "@/lib/ai/index.js";
+import { safeFetch } from "@/lib/crawl/safeFetch.js";
+
+const REF_MIME = {
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+  ".webp": "image/webp", ".svg": "image/svg+xml",
+};
+
+/**
+ * Resolve a reference asset URL into { data(base64), mimeType }.
+ * - Local stored asset (/imported-assets/..): read from public dir.
+ * - Remote URL: SSRF-safe fetch.
+ * Returns null on failure (generation proceeds without a reference).
+ */
+async function resolveReferenceAsset(url) {
+  try {
+    if (url.startsWith("/imported-assets/")) {
+      const safeName = path.basename(url); // prevent traversal
+      const full = path.join(process.cwd(), "public", "imported-assets", safeName);
+      const buf = await fs.readFile(full);
+      const mime = REF_MIME[path.extname(safeName).toLowerCase()] || "image/png";
+      if (mime === "image/svg+xml") return null; // raster-only for the model
+      return { data: buf.toString("base64"), mimeType: mime };
+    }
+    if (/^https?:\/\//i.test(url)) {
+      const res = await safeFetch(url, { accept: "image/*", asBuffer: true, maxBytes: 8 * 1024 * 1024, timeoutMs: 10_000 });
+      const mime = (res.contentType || "").split(";")[0].trim().toLowerCase();
+      if (!mime.startsWith("image/") || mime === "image/svg+xml") return null;
+      if (!(res.body instanceof Buffer)) return null;
+      return { data: res.body.toString("base64"), mimeType: mime };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 import {
   isPaidGenerationEnabled,
   getProviderName,
@@ -85,6 +116,22 @@ export async function POST(request) {
   }
   const input = parsed.data;
 
+  // 1b. Resolve a chosen IMPORTED asset into the generation reference image.
+  //     This fixes the bug where a crawler-found image was shown but never sent
+  //     to the model (only manual uploads populated input.image). We fetch it
+  //     server-side, SSRF-safely, and feed it as the reference.
+  if (!input.image && input.referenceAssetUrl) {
+    const resolved = await resolveReferenceAsset(input.referenceAssetUrl);
+    if (resolved) {
+      input.image = resolved;
+      input.sourceImageMeta = {
+        ...(input.sourceImageMeta || {}),
+        role: input.referenceAssetRole || input.sourceImageMeta?.role,
+        url: input.referenceAssetUrl,
+      };
+    }
+  }
+
   // 2. Duplicate-submit guard
   if (input.clientRequestId && seenRequests.has(input.clientRequestId)) {
     return NextResponse.json(
@@ -134,68 +181,24 @@ export async function POST(request) {
     }
   }
 
-  // 5. Build prompt via the brand-aware creative pipeline:
-  //    source-image class → CreativeBrief → ScenePlan → professional prompt.
-  //    (A user prompt override still wins when supplied.)
-  const product = {
-    name: input.productName,
-    brand: input.brand || input.productProfile?.brand || undefined,
-    description: input.description || input.productProfile?.description,
-    category: input.productProfile?.category,
-    targetCustomer: input.productProfile?.targetCustomer,
-    ...(input.productProfile || {}),
-  };
-  const brand = input.brandProfile || null;
+  // 5. Compile the creative request with the SINGLE canonical compiler (the
+  //    same one /api/creative/preview uses). This dispatches on entity type, so
+  //    a SaaS/service/creator never gets physical-product language.
+  const compiled = compileCreativeRequest(input);
+  const { brief, scenePlan, finalVideoPrompt: prompt, generationContext, preflight } = compiled;
 
-  // Classify the source image so a poster/ad/collage is treated as a
-  // REFERENCE rather than literally animated (the key quality fix).
-  const sourceImage = input.image
-    ? classifySourceImageHeuristic({
-        role: input.sourceImageMeta?.role,
-        url: input.sourceImageMeta?.url,
-        hintText: input.sourceImageMeta?.hintText,
-      })
-    : undefined;
-
-  const { brief, scenePlan } = buildCreativePlan({
-    product,
-    brand,
-    template: input.template,
-    durationSeconds: input.durationSeconds,
-    aspectRatio: input.aspectRatio,
-    sourceImage,
-    brandInfluence: input.brandInfluence,
-    userIntent: input.userIntent,
-  });
-
-  const composed = composeVideoPrompt({
-    brief,
-    scenePlan,
-    product,
-    brand,
-    sourceImage,
-    aspectRatio: input.aspectRatio,
-    offer: input.offer,
-    cta: input.cta,
-  });
-
-  const prompt =
-    input.promptOverride && input.promptOverride.length > 0
-      ? input.promptOverride
-      : composed.prompt;
-
-  // Compile the MINIMAL generation context (not the whole profile/crawl). This
-  // is what a future multi-input pipeline/Remotion step should consume; we also
-  // return it so context-reduction is measurable.
-  const generationContext = compileGenerationContext({
-    entityType: input.productProfile?.entityType || input.entityType,
-    profile: product,
-    brand,
-    heroAsset: input.productProfile?.primaryImage || null,
-    sourceType: sourceImage?.type || null,
-    concept: input.concept || null,
-    brief,
-  });
+  // 5b. PREFLIGHT GATE — never spend credits on an entity/prompt contradiction
+  //     (e.g. a SaaS plan that mentions a bottle). Blockers hard-stop here.
+  if (!preflight.readyForPaidGeneration) {
+    return NextResponse.json(
+      {
+        error: "Creative preflight failed — generation blocked.",
+        code: "PREFLIGHT_BLOCKED",
+        preflight,
+      },
+      { status: 422 }
+    );
+  }
 
   // 6. Generate
   activeGenerations += 1;
@@ -229,12 +232,16 @@ export async function POST(request) {
       // Surface the internal creative plan + source-image handling for
       // transparency/debugging (helps show WHY a poster didn't become a phone).
       creative: {
+        entityType: compiled.entityType,
+        strategy: compiled.strategy,
+        generationMode: compiled.generationMode,
         brief,
         scenePlan,
-        sourceImage: sourceImage || null,
-        negativePrompt: composed.negativePrompt,
+        sourceImage: compiled.sourceImage,
+        negativeRules: compiled.negativeRules,
         generationContext,
-        generationContextChars: contextSize(generationContext),
+        generationContextChars: compiled.generationContextChars,
+        preflight,
       },
       mock: result.mock,
       provider: result.provider,

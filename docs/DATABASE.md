@@ -1,4 +1,4 @@
-# Database — AdForge Studio
+# Database — MakeAdClips Studio
 
 _Last updated: 2026-10-09_
 

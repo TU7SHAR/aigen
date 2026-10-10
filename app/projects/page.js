@@ -1,7 +1,7 @@
 import ComingSoon from "@/components/layout/ComingSoon.js";
 
 export const metadata = {
-  title: "Projects — AdForge",
+  title: "Projects — MakeAdClips",
   description: "Your saved ad projects.",
 };
 

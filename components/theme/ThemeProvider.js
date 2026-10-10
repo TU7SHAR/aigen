@@ -25,7 +25,7 @@ export default function ThemeProvider({ children }) {
       defaultTheme="system"
       enableSystem
       disableTransitionOnChange
-      storageKey="adforge-theme"
+      storageKey="makeadclips-theme"
     >
       {children}
     </NextThemesProvider>

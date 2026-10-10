@@ -1,4 +1,4 @@
-# AdForge Studio — AI product video ads
+# MakeAdClips Studio — AI product video ads
 
 Turn a single product photo into a short, on-brand video ad using Google's
 **Gemini Omni Flash** (`gemini-omni-1.1-flash`). Built on **Next.js 16 (App

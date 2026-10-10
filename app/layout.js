@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "AdForge Studio — AI product video ads",
+  title: "MakeAdClips Studio — AI product video ads",
   description:
     "Turn one product photo into a polished AI video ad. Built for ecommerce brands.",
 };
