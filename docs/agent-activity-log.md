@@ -498,3 +498,39 @@
   not claimed here. Visual intelligence (rendered screenshots, DesignProfile,
   image verification, SVG raster, no-image recovery) is the NEXT PR.
 - **Branch/PR:** `feat/concept-drives-production` → `main`.
+
+## 2026-10-11 — Visual intelligence (verified assets, DesignProfile, SVG) + avatar feasibility report
+
+- **Asked:** (1) acknowledge PR 17 is partial (templates still drive lighting/
+  camera — true, not claimed solved); (2) build visual intelligence: verified
+  image download, relevance analysis, SVG, rendered screenshots, computed-style
+  extraction, DesignProfile, missing-image/brand fallback, relevance-based asset
+  selection; (3) research self-hosted avatars (MuseTalk/SadTalker/TTS) — no blind
+  integration; (4) real AI Creative Director (noted as follow-up); (5) keep UX
+  simple; (6) no silent format substitution. No paid calls.
+- **Did (visual intelligence, implemented + tested):**
+  - `lib/assets/verify.js`: download→decode(sharp)→validate→reject lifecycle;
+    tiny/broken/undecodable images rejected; SVG sanitize+rasterize to PNG.
+  - `lib/design/designProfile.js`: evidence-based palette/typography/shape with
+    provenance+confidence; never invents a palette; rendered-merge path.
+  - `lib/design/screenshot.js`: Playwright screenshot/computed-style provider
+    behind an interface, opt-in (ENABLE_RENDERED_CAPTURE), graceful absence —
+    app never depends on a browser. UNVERIFIED (Playwright not installed in CI).
+  - `lib/assets/selectReference.js`: icons/logos never become the primary scene
+    reference; selection depends on entity/creative.
+  - Wired verification + DesignProfile into importProduct; returns
+    designProfile + rejectedAssets; brand colors prefer DesignProfile.
+  - Tests: +11 (92/92 total). Live import proof: Wikipedia → 3 verified assets
+    (all with storedUrl+dims), palette detected (#3366cc…), 9→3 kept.
+- **Did (avatar feasibility, docs/AVATAR_FEASIBILITY.md — RESEARCH ONLY):**
+  Benchmarked MuseTalk (MIT, ~30fps/V100, commercial-safe), SadTalker (still-
+  photo animator, verify weights), Wav2Lip/LatentSync (license caveats); TTS
+  licensing minefield (Piper MIT / Kokoro Apache safe; XTTS-v2 weights NON-
+  commercial — avoid). Recommendation: Gemini→Piper→MuseTalk behind a provider
+  interface, Python GPU worker + durable jobs + object storage (not built).
+  Current code already BLOCKS avatar_presenter (no fake presenter).
+- **Honest status:** multi-upload/role-tag/extra-context UI, AI image
+  classification, AI keyframe recovery, and the real AI Creative Director
+  (lighting/camera authored by Gemini) are NOT built — flagged, not claimed.
+  Rendered screenshots are code-complete but unverified without a browser host.
+- **Branch/PR:** `feat/visual-intelligence` → `main`.
