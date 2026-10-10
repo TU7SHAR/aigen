@@ -6,10 +6,10 @@ import {
   Loader2,
   Download,
   AlertCircle,
-  Sparkles,
   ImageIcon,
   Info,
   Link2,
+  ArrowRight,
 } from "lucide-react";
 import ProductImport from "./ProductImport.js";
 
@@ -223,8 +223,8 @@ export default function Studio() {
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       {/* Status banner */}
       {status && (
-        <div className="mb-6 flex items-start gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="card mb-6 flex items-start gap-2 px-4 py-3 text-sm text-muted">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
           <div>
             Active provider: <b>{status.provider}</b>.{" "}
             {status.provider === "mock" ? (
@@ -247,12 +247,12 @@ export default function Studio() {
 
       {/* Create-from mode switcher */}
       <div className="mb-6">
-        <div className="mb-3 text-sm font-medium text-zinc-500">Create from</div>
-        <div className="inline-flex rounded-xl border border-zinc-200 p-1 dark:border-zinc-800">
+        <div className="eyebrow mb-3">Create from</div>
+        <div className="inline-flex rounded-xl border border-line bg-surface p-1">
           <button
             onClick={() => setMode("url")}
             className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition ${
-              mode === "url" ? "bg-indigo-600 text-white" : "text-zinc-600 dark:text-zinc-300"
+              mode === "url" ? "bg-accent text-accent-contrast" : "text-muted hover:text-ink"
             }`}
           >
             <Link2 className="h-4 w-4" /> Product URL
@@ -260,7 +260,7 @@ export default function Studio() {
           <button
             onClick={() => setMode("manual")}
             className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition ${
-              mode === "manual" ? "bg-indigo-600 text-white" : "text-zinc-600 dark:text-zinc-300"
+              mode === "manual" ? "bg-accent text-accent-contrast" : "text-muted hover:text-ink"
             }`}
           >
             <Upload className="h-4 w-4" /> Upload manually
@@ -275,15 +275,18 @@ export default function Studio() {
         {/* LEFT: form */}
         <div className="space-y-6">
           {imported && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-              Imported from URL{imported.brandProfile?.name ? ` · brand: ${imported.brandProfile.name}` : ""}
-              {imported.brandProfile ? ` · brand influence: ${imported.brandInfluence}` : " · no brand detected"}.
-              Fields are prefilled below — edit anything before generating.
+            <div className="card px-4 py-3 text-sm" style={{ borderLeft: "3px solid var(--accent)" }}>
+              <span className="mono-meta !text-accent">Imported</span>
+              <span className="ml-2 text-muted">
+                {imported.brandProfile?.name ? `brand: ${imported.brandProfile.name} · ` : ""}
+                {imported.brandProfile ? `influence: ${imported.brandInfluence}` : "no brand detected"} ·
+                fields prefilled below — edit before generating.
+              </span>
               {importedImages.length > 0 && (
                 <div className="mt-2 flex gap-2 overflow-x-auto">
                   {importedImages.slice(0, 6).map((u) => (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img key={u} src={u} alt="" className="h-14 w-14 shrink-0 rounded border border-emerald-200 object-contain" />
+                    <img key={u} src={u} alt="" className="h-14 w-14 shrink-0 rounded border border-line object-contain" />
                   ))}
                 </div>
               )}
@@ -291,7 +294,7 @@ export default function Studio() {
           )}
           {/* Upload */}
           <section>
-            <label className="mb-2 block text-sm font-medium">Product image</label>
+            <label className="eyebrow mb-2 block">Product image</label>
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -304,12 +307,14 @@ export default function Studio() {
                 onPickFile(e.dataTransfer.files?.[0]);
               }}
               onClick={() => fileInputRef.current?.click()}
-              className={`flex min-h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-6 text-center transition ${
-                dragOver
-                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30"
-                  : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700"
+              className={`frame-corners relative flex min-h-44 cursor-pointer flex-col items-center justify-center gap-2 rounded-brand border bg-surface p-6 text-center transition ${
+                dragOver ? "border-accent" : "border-line hover:border-ink"
               }`}
             >
+              <span className="corner tl" />
+              <span className="corner tr" />
+              <span className="corner bl" />
+              <span className="corner br" />
               {image ? (
                 // Local object-URL preview of a user-selected file; next/image
                 // cannot optimize blob: URLs, so a raw <img> is correct here.
@@ -321,10 +326,11 @@ export default function Studio() {
                 />
               ) : (
                 <>
-                  <Upload className="h-7 w-7 text-zinc-400" />
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    Drag & drop or click to upload (PNG/JPEG/WEBP, max 5 MB)
+                  <Upload className="h-7 w-7 text-muted" />
+                  <p className="text-sm text-muted">
+                    Drag &amp; drop or click to upload
                   </p>
+                  <p className="mono-meta">PNG / JPEG / WEBP · MAX 5 MB</p>
                 </>
               )}
               <input
@@ -342,7 +348,7 @@ export default function Studio() {
                   e.stopPropagation();
                   setImage(null);
                 }}
-                className="mt-2 text-xs text-zinc-500 underline"
+                className="mt-2 text-xs text-muted underline hover:text-ink"
               >
                 Remove image
               </button>
@@ -403,14 +409,17 @@ export default function Studio() {
                   key={t.id}
                   type="button"
                   onClick={() => update("template")(t.id)}
-                  className={`rounded-xl border p-3 text-left text-sm transition ${
+                  className={`rounded-brand border p-3 text-left text-sm transition ${
                     form.template === t.id
-                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30"
-                      : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800"
+                      ? "border-accent bg-surface"
+                      : "border-line bg-surface hover:border-ink"
                   }`}
                 >
-                  <div className="font-medium">{t.label}</div>
-                  <div className="text-xs text-zinc-500">{t.hint}</div>
+                  <div className="font-medium">
+                    {form.template === t.id && <span className="text-accent">▸ </span>}
+                    {t.label}
+                  </div>
+                  <div className="mono-meta mt-0.5">{t.hint}</div>
                 </button>
               ))}
             </div>
@@ -466,7 +475,7 @@ export default function Studio() {
             {editingPrompt && (
               <button
                 type="button"
-                className="mt-1 text-xs text-indigo-600 underline"
+                className="mt-1 text-xs text-accent underline"
                 onClick={() => setPromptEdit(null)}
               >
                 Reset to auto-generated prompt
@@ -477,82 +486,99 @@ export default function Studio() {
 
         {/* RIGHT: generate + result */}
         <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
-            <div className="mb-3 flex items-center justify-between text-sm">
-              <span className="text-zinc-500">Estimated cost</span>
-              <span className="font-semibold">{estCostLabel}</span>
+          <div className="card p-5">
+            {/* production-equipment style metadata readout */}
+            <div className="mono-meta mb-4 grid grid-cols-2 gap-y-1.5">
+              <span>{String(form.durationSeconds).padStart(2, "0")}:00 SEC</span>
+              <span className="text-right">{form.resolution.toUpperCase()}</span>
+              <span>{form.aspectRatio}</span>
+              <span className="text-right">OMNI FLASH</span>
             </div>
-            <p className="mb-4 text-xs text-zinc-500">
-              Estimate only — confirm real pricing in Google AI Studio.
-            </p>
+            <div className="mb-4 flex items-center justify-between border-t border-line pt-3">
+              <span className="mono-meta">Est. cost</span>
+              <span className="font-semibold text-accent">{estCostLabel}</span>
+            </div>
             <button
               onClick={generate}
               disabled={processing}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 font-medium text-white transition hover:bg-indigo-700 disabled:opacity-60"
+              className="btn btn-primary w-full justify-between"
             >
               {processing ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Generating…
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> GENERATING…
+                  </span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="h-4 w-4" /> Generate video
+                  <span>GENERATE VIDEO</span>
+                  <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </button>
+            <p className="mono-meta mt-3">Estimate only — confirm in AI Studio.</p>
           </div>
 
           {error && (
-            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{error}</span>
+            <div
+              className="card flex items-start gap-2 px-4 py-3 text-sm"
+              style={{ borderLeft: "3px solid var(--accent)" }}
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+              <span className="text-ink">{error}</span>
             </div>
           )}
 
           {result && (
-            <div className="space-y-3 rounded-2xl border border-zinc-200 p-5 dark:border-zinc-800">
+            <div className="card space-y-3 p-5">
               {result.mock && (
-                <div className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-                  ⚠ Mock output — placeholder video, no real generation.
+                <div className="accent-chip !rounded-md">
+                  <span className="accent-dot" />
+                  <span className="mono-meta !text-ink">Mock — placeholder, not real generation</span>
                 </div>
               )}
-              <video
-                src={result.video}
-                controls
-                className="w-full rounded-lg bg-black"
-              />
+              <div className="frame-corners relative overflow-hidden rounded-brand bg-black">
+                <span className="corner tl" />
+                <span className="corner tr" />
+                <span className="corner bl" />
+                <span className="corner br" />
+                <video src={result.video} controls className="w-full" />
+              </div>
               <a
                 href={result.video}
                 download={result.downloadName}
-                className="flex items-center justify-center gap-2 rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                className="btn btn-secondary w-full"
               >
                 <Download className="h-4 w-4" /> Download MP4
               </a>
-              <div className="space-y-1 text-xs text-zinc-500">
-                <div>
-                  Provider: {result.provider} · Model: {result.model}
+              <div className="mono-meta space-y-1 !normal-case">
+                <div className="uppercase">
+                  {result.provider} · {result.model}
                 </div>
                 {result.cost?.reported?.state === "billed" && (
-                  <div className="font-medium text-zinc-700 dark:text-zinc-300">
-                    Billed: ${Number(result.cost.reported.amountUsd).toFixed(4)}{" "}
-                    (from reported usage)
+                  <div className="font-medium text-ink">
+                    BILLED ${Number(result.cost.reported.amountUsd).toFixed(4)}
                     {result.usage?.total_tokens
-                      ? ` · ${result.usage.total_tokens} tokens`
+                      ? ` · ${result.usage.total_tokens} TOK`
                       : ""}
                   </div>
                 )}
                 {result.cost?.reported?.state === "unknown" && (
-                  <div>Actual cost unknown — check Google AI Studio billing.</div>
+                  <div>Actual cost unknown — check AI Studio billing.</div>
                 )}
-                <div>{result.cost?.note}</div>
+                <div className="normal-case tracking-normal">{result.cost?.note}</div>
               </div>
             </div>
           )}
 
           {!result && !error && (
-            <div className="flex items-center gap-2 rounded-2xl border border-dashed border-zinc-300 px-4 py-6 text-sm text-zinc-500 dark:border-zinc-700">
+            <div className="frame-corners relative flex items-center justify-center gap-2 rounded-brand border border-line bg-surface px-4 py-10 text-sm text-muted">
+              <span className="corner tl" />
+              <span className="corner tr" />
+              <span className="corner bl" />
+              <span className="corner br" />
               <ImageIcon className="h-4 w-4" />
-              Your generated ad will appear here.
+              Your generated ad appears here.
             </div>
           )}
         </aside>
@@ -565,7 +591,7 @@ export default function Studio() {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium">{label}</span>
+      <span className="eyebrow mb-1.5 block">{label}</span>
       {children}
     </label>
   );

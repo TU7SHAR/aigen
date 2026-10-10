@@ -1,75 +1,94 @@
 import Link from "next/link";
-import { Sparkles, Zap, ShieldCheck, Image as ImageIcon } from "lucide-react";
+import { ArrowRight, Link2, Zap, ShieldCheck, Film } from "lucide-react";
 
 export default function Home() {
   return (
     <main className="flex-1">
       {/* Hero */}
-      <section className="mx-auto max-w-5xl px-6 py-24 text-center">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300">
-          <Sparkles className="h-3.5 w-3.5" /> AI product video ads
-        </span>
-        <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-black sm:text-5xl dark:text-zinc-50">
-          Turn one product photo into a polished video ad.
+      <section className="mx-auto max-w-5xl px-6 pt-24 pb-20">
+        <p className="eyebrow mb-6">◩ AI Product Video Studio</p>
+        <h1 className="display max-w-3xl text-5xl sm:text-6xl">
+          Turn one product photo into a{" "}
+          <span className="text-accent">professional</span> video ad.
         </h1>
-        <p className="mx-auto mt-5 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
-          AdForge Studio helps ecommerce brands create short, on-brand product
-          video ads with Google&apos;s Gemini — upload a photo, pick a style,
-          and generate.
+        <p className="mt-6 max-w-xl text-lg text-muted">
+          AdForge Studio reads your product page, understands your brand, plans
+          the concept, and generates a commercial-grade ad with Google&apos;s
+          Gemini — not a generic AI template.
         </p>
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <Link
-            href="/studio"
-            className="rounded-full bg-indigo-600 px-6 py-3 font-medium text-white transition hover:bg-indigo-700"
-          >
-            Open the Studio
+
+        <div className="mt-9 flex flex-wrap items-center gap-3">
+          <Link href="/studio" className="btn btn-primary">
+            Open the Studio <ArrowRight className="h-4 w-4" />
           </Link>
-          <a
-            href="#how"
-            className="rounded-full border border-zinc-300 px-6 py-3 font-medium transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-          >
+          <a href="#how" className="btn btn-secondary">
             How it works
           </a>
         </div>
-        <p className="mt-4 text-xs text-zinc-500">
-          Prototype — real generation requires a Gemini API key. Runs in free
-          mock mode by default (no cost).
-        </p>
+
+        <div className="mono-meta mt-6 flex flex-wrap gap-x-5 gap-y-1">
+          <span>720P / 1080P</span>
+          <span>9:16 · 16:9</span>
+          <span>OMNI FLASH</span>
+          <span>FREE MOCK MODE BY DEFAULT</span>
+        </div>
+      </section>
+
+      {/* Framed hero graphic — the brand motif in action */}
+      <section className="mx-auto max-w-5xl px-6 pb-24">
+        <div className="frame-corners relative overflow-hidden rounded-brand border border-line bg-surface">
+          <span className="corner tl" />
+          <span className="corner tr" />
+          <span className="corner bl" />
+          <span className="corner br" />
+          <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-16 text-center">
+            <Film className="h-8 w-8 text-accent" />
+            <p className="eyebrow">Product → Brand → Concept → Film</p>
+            <p className="max-w-md text-muted">
+              Paste a product URL and we handle the rest, up to a downloadable
+              MP4 you review before spending a cent.
+            </p>
+          </div>
+        </div>
       </section>
 
       {/* Features */}
-      <section
-        id="how"
-        className="mx-auto grid max-w-5xl gap-6 px-6 pb-24 sm:grid-cols-3"
-      >
-        <Feature
-          icon={<ImageIcon className="h-5 w-5" />}
-          title="Photo → video"
-          body="Upload a product shot and generate motion footage that keeps your product recognizable."
-        />
-        <Feature
-          icon={<Zap className="h-5 w-5" />}
-          title="Opinionated templates"
-          body="Luxury, Bold, Minimal, Product Demo and Problem→Solution — good ad structures, not empty prompts."
-        />
-        <Feature
-          icon={<ShieldCheck className="h-5 w-5" />}
-          title="Cost-aware by default"
-          body="Paid generation is off until you enable it, with cost estimates and a local spend guard."
-        />
+      <section id="how" className="mx-auto max-w-5xl px-6 pb-28">
+        <p className="eyebrow mb-6">How it works</p>
+        <div className="grid gap-px overflow-hidden rounded-brand border border-line bg-line sm:grid-cols-3">
+          <Feature
+            icon={<Link2 className="h-5 w-5" />}
+            index="01"
+            title="Import from URL"
+            body="We crawl the product page, extract real details, rank the best images and read your brand colors — no manual typing."
+          />
+          <Feature
+            icon={<Zap className="h-5 w-5" />}
+            index="02"
+            title="Brand-aware concepts"
+            body="A deliberate creative brief and scene plan, shaped by your brand. Two brands never get the same ad."
+          />
+          <Feature
+            icon={<ShieldCheck className="h-5 w-5" />}
+            index="03"
+            title="Review, then generate"
+            body="Approve the concept and images first. Paid generation stays off by default, with cost shown up front."
+          />
+        </div>
       </section>
     </main>
   );
 }
 
-function Feature({ icon, title, body }) {
+function Feature({ icon, index, title, body }) {
   return (
-    <div className="rounded-2xl border border-zinc-200 p-6 dark:border-zinc-800">
-      <div className="mb-3 inline-flex rounded-xl bg-indigo-50 p-2 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-300">
-        {icon}
+    <div className="bg-surface p-7">
+      <div className="mb-4 flex items-center justify-between">
+        <span className="text-accent">{icon}</span>
+        <span className="mono-meta">{index}</span>
       </div>
-      <h3 className="font-semibold">{title}</h3>
-      <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400">{body}</p>
+      <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
+      <p className="mt-2 text-sm text-muted">{body}</p>
     </div>
   );
 }
