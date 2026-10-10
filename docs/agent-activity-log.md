@@ -1,5 +1,57 @@
 # Agent activity log
 
+## 2026-10-11 — Product PR A: multi-image upload, editable product intelligence, user context, asset selection, state propagation
+
+- **Asked:** (priority pivot to product quality) make the app understand +
+  let users CORRECT what the imported site promotes: edit entity/industry/
+  category/offering, add written context, upload multiple images, remove
+  irrelevant scraped assets, select which images influence generation + their
+  purpose, say which features/benefits/messages to emphasize and what must NOT
+  appear — all corrections propagating to creative planning AND the real
+  generation request. No industry-specific hardcoding. No paid calls.
+- **Did (backend contract first, then UI, both tested):**
+  - **Schema (`lib/validation.js`):** added `category`, `offering`,
+    `emphasis[]`, `avoid[]`, and `referenceAssets[]` ({url, role, primary}).
+    `userIntent` (already present, previously unused) now carries free context.
+  - **Compile (`lib/creative/compile.js`):** user `category`/`offering`
+    override scraped values; `emphasis`/`avoid` normalized (trim+dedupe) and
+    threaded into the planner and prompt composer.
+  - **Prompt (`lib/creative/promptComposer.js`):** emphasis → an affirmative
+    "EMPHASIZE …" instruction; avoid → appended to the negative/`Avoid:` rules
+    (deduped). **Planner** carries emphasis/avoid onto the brief;
+    **generationContext** now includes category/offering + emphasis/avoid so
+    the grounding (and PR B's AI director) see the corrections.
+  - **Multi-reference (`lib/api/generateCore.js`):** resolves the PRIMARY of
+    `referenceAssets[]` (flagged or first) into the hero `image`; records the
+    full selection on `sourceImageMeta.selectedReferences`. Single-URL
+    `referenceAssetUrl` kept for back-compat.
+  - **Review UI (`components/studio/ProductImport.js`):** editable type/
+    category/offering; a real **asset manager** built from the importer's
+    `assets[]` (select / assign role / set primary / remove) with
+    **multi-file upload** (PNG/JPEG/WebP ≤5MB, client base64); emphasis / avoid
+    / extra-context inputs. Corrections flow into concept reasoning and the
+    handoff payload (incl. `designProfile`, previously never forwarded).
+  - **Studio (`components/studio/Studio.js`):** threads every new field into
+    BOTH the `/api/creative/preview` payload and the `/api/generate` payload,
+    so the previewed prompt == the generated prompt. A primary UPLOADED
+    reference flows via the single base64 `image` path; URL references via
+    `referenceAssets[]`.
+- **Files affected:** `lib/validation.js`, `lib/creative/compile.js`,
+  `lib/creative/promptComposer.js`, `lib/creative/planner.js`,
+  `lib/creative/generationContext.js`, `lib/api/generateCore.js`,
+  `components/studio/ProductImport.js`, `components/studio/Studio.js`,
+  `tests/product-controls.test.mjs` (new), `docs/agent-activity-log.md`.
+- **Verification:** `npm run lint` clean · `npm test` **127/127** (7 new in
+  `product-controls`: category override, emphasis-in-prompt, avoid-in-negatives,
+  brief carry, normalization, multi-ref primary honored, first-selected
+  fallback) · `npm run build` OK. **Live HTTP check** against
+  `/api/creative/preview`: corrected `entityType=saas`, EMPHASIZE line present,
+  user avoids in negative rules, corrected category in context, brief carries
+  emphasis/avoid, preflight ready. No paid video calls.
+- **Scope note:** no industry→creative hardcoding added — emphasis/avoid/
+  context are free user inputs used verbatim; roles are technical/structural.
+- **Branch/PR:** `feat/product-controls` (stacked on `fix/pr18-corrections`).
+
 ## 2026-10-11 — PR #18 corrections (round 2): honest labeling, allowlist SVG sanitizer, no-fallback reference, real server-pipeline integration test, capture gated unsafe
 
 - **Asked:** reviewer follow-up on PR #19/#20 — (1) don't claim the browser
