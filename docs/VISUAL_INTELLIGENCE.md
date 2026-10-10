@@ -73,3 +73,48 @@ for physical products and ignored the detected entity type.
   `isVector`; a full first-class Asset entity with raster previews is pending.
 
 See `docs/ROADMAP.md` for sequencing.
+
+---
+
+## Update 2026-10-11 — Visual-intelligence PR (what's now REAL)
+
+### Implemented and tested
+- **Verified asset lifecycle** (`lib/assets/verify.js`): every candidate image is
+  downloaded (SSRF-safe) and **decoded with `sharp`** to confirm it's a real,
+  non-corrupt image with true dimensions. Broken / undecodable / too-small
+  (<200px max edge) images are **rejected** (kept in `rejectedAssets` for
+  debugging), never counted as usable. The importer now stores only verified
+  assets, so the gallery can't show broken thumbnails. *Live-verified*: a
+  Wikipedia import kept 3 of 9 candidates, all with real `storedUrl` +
+  dimensions.
+- **SVG support** (`verify.js` + `store.sanitizeSvg` + `sharp`): SVGs are
+  sanitized then **rasterized to PNG** so raster-only video models can use them;
+  the vector is kept too.
+- **DesignProfile** (`lib/design/designProfile.js`): evidence-based palette
+  (intentional colors from theme-color / CSS vars / CTA colors; white ignored),
+  typography families, shape hints, with provenance + confidence. If no palette
+  exists it reports `detected:false` and **does not invent one**. The importer
+  returns `designProfile`; brand colors now prefer it.
+- **Relevance-based reference selection** (`lib/assets/selectReference.js`): an
+  icon/logo is **never** chosen as the primary scene reference; selection depends
+  on entity type (physical → product shot; SaaS → UI screenshot; brand → hero
+  visual). A logo-only site yields "no scene primary" (logo kept for an
+  end-card overlay).
+
+### Implemented but UNVERIFIED (needs a browser host)
+- **Rendered screenshots + computed-style capture** (`lib/design/screenshot.js`):
+  a Playwright provider behind an interface, **opt-in** via
+  `ENABLE_RENDERED_CAPTURE=true`. Playwright is **not installed** in CI and the
+  app does **not** depend on it — when absent it returns `{available:false}` and
+  we fall back to HTML/CSS design extraction. The capture code is written against
+  the Playwright API but has not been exercised with a live browser here.
+
+### NOT yet implemented (honest)
+- Multi-image upload / per-asset role tagging / extra-context field inside the
+  import review UI (the backend asset model supports roles; the richer upload UX
+  is the next slice).
+- AI multimodal image classification (we classify by role/URL heuristics +
+  verification; a vision pass for ambiguous assets is future).
+- Missing-image **AI keyframe** generation (recovery currently = screenshots /
+  SVG / logo / user upload; a cheap image-model keyframe is future and must be
+  cost-approved).
