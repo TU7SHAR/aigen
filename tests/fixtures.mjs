@@ -60,3 +60,44 @@ export const DUPLICATE_HEAVY_HTML = `
 <footer><a>Shop now</a><a>Shop now</a><a>Shop now</a>
 <p>Sign up for our newsletter</p><p>Sign up for our newsletter</p></footer>
 </body></html>`;
+
+export const SAAS_HOMEPAGE_HTML = `
+<!doctype html><html><head>
+<title>BhavishAI — Personalized AI Astrology</title>
+<meta name="description" content="BhavishAI gives you personalized astrology guidance and birth-chart insights powered by AI."/>
+<meta property="og:title" content="BhavishAI"/>
+<meta property="og:image" content="https://bhavishai.in/assets/hero_1600.jpg"/>
+<meta name="theme-color" content="#6D28D9"/>
+<style>:root{--brand-primary-color:#6D28D9;--accent-color:#D8B46A}</style>
+</head><body>
+<header class="site-header"><nav class="nav"><a href="/">Home</a><a href="/pricing">Pricing</a><a href="/get-report">Get report</a><a href="/about">About</a></nav></header>
+<main>
+  <section class="hero">
+    <h1>Your personalized AI astrology guide</h1>
+    <p>Get a tailored birth-chart reading and daily guidance in minutes. No appointments, no guesswork.</p>
+    <a class="btn cta" style="background:#6D28D9" href="/get-report">Get your report</a>
+    <img src="https://bhavishai.in/assets/hero_1600.jpg"/>
+  </section>
+  <section>
+    <h2>What you get</h2>
+    <ul><li>Personalized birth chart</li><li>Daily guidance</li><li>Ask a question</li></ul>
+  </section>
+  <section>
+    <h2>How it works</h2>
+    <p>Enter your birth details, and our AI builds your personalized chart and insights.</p>
+  </section>
+</main>
+<footer class="footer"><a href="/privacy">Privacy</a><a href="/terms">Terms</a>
+<p>© BhavishAI</p></footer>
+</body></html>`;
+
+export const SERVICE_HTML = `
+<!doctype html><html><head><title>Northside Plumbing — Fast Local Plumbers</title>
+<meta name="description" content="Licensed plumbers serving the north side. Book a visit today."/></head><body>
+<nav><a href="/">Home</a><a href="/services">Services</a><a href="/contact">Contact us</a></nav>
+<main>
+  <h1>Fast, reliable local plumbing</h1>
+  <p>Our services include leak repair, drain cleaning and water heater installation. Book an appointment and get a quote today.</p>
+  <ul><li>Leak repair</li><li>Drain cleaning</li><li>Water heater installation</li></ul>
+  <img src="https://northside.example/van_1200.jpg"/>
+</main></body></html>`;

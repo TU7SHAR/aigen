@@ -77,6 +77,8 @@ export default function Studio() {
       productProfile: payload.productProfile,
       brandProfile: payload.brandProfile,
       brandInfluence: payload.brandInfluence,
+      entityType: payload.entityType,
+      concept: payload.concept,
     });
     setImportedImages(
       [payload.heroUrl, ...(payload.gallery || [])].filter(Boolean)
@@ -183,6 +185,8 @@ export default function Studio() {
       productProfile: imported?.productProfile || undefined,
       brandProfile: imported?.brandProfile || undefined,
       brandInfluence: imported?.brandInfluence || "balanced",
+      entityType: imported?.entityType || undefined,
+      concept: imported?.concept || undefined,
       // Hint the source-image classifier (e.g. imported poster/ad vs packshot).
       sourceImageMeta: image
         ? { hintText: image.name, url: image.name }

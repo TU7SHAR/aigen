@@ -15,6 +15,7 @@ import { generateConcepts } from "@/lib/creative/concepts.js";
 const schema = z.object({
   product: z.object({}).passthrough().optional().default({}),
   brand: z.object({}).passthrough().nullable().optional(),
+  entityType: z.string().optional(),
 });
 
 export async function POST(request) {
@@ -34,6 +35,7 @@ export async function POST(request) {
   const result = generateConcepts({
     product: parsed.data.product,
     brand: parsed.data.brand ?? null,
+    entityType: parsed.data.entityType,
   });
   return NextResponse.json({ ok: true, ...result });
 }
