@@ -14,10 +14,22 @@ The route handler and UI never name a model; they call the provider.
 
 ## Registry
 
-| Model | Status | ~$/sec (720p) | Default | Notes |
+| Model | Adapter | ~$/sec (720p) | Default | Notes |
 |---|---|---:|:---:|---|
-| `gemini-omni-1.1-flash` | GA | 0.10 | ✅ | Image-to-video, editing, extension via Interactions API. Chosen for usable output + stability. |
-| `veo-3.1-lite` | **deprecated** (shutdown 2026-10-22) | 0.05 | — | Cheapest/sec but preview is being shut down; different request/response shape → needs its own adapter. Reference entry only; **do not couple to it**. |
+| `gemini-omni-1.1-flash` | gemini-omni | 0.10 | ✅ | GA. Image-to-video, editing, extension via the synchronous Interactions API. Recommended for usable output + stability. |
+| `veo-3.1-lite` | veo | 0.05 | — | Cheapest/sec. Veo long-running `generateVideos` operation. Preview; shutdown 2026-10-22 (heads-up warning, not blocked). |
+| `veo-3.1-fast` | veo | 0.10 | — | Faster Veo tier, native audio. Preview. |
+| `veo-3.1` | veo | 0.40 | — | Highest-quality Veo tier. Preview; most expensive. |
+
+Two provider adapters implement the same `VideoProvider` contract:
+- `lib/ai/geminiProvider.js` — Gemini Omni (synchronous `interactions.create`).
+- `lib/ai/veoProvider.js` — Veo (`generateVideos` → poll `getVideosOperation`
+  → download the result). **Unverified** against a live key.
+
+`lib/ai/index.js` is the **router**: in real mode it reads the active model's
+`providerImpl` from the registry and constructs ONLY that adapter. Adding a new
+model with a known API shape is just a registry entry; a new API shape is a new
+adapter behind the same contract — routes/UI never change.
 
 `usdPerSecond720p` drives only the pre-call **estimate** and dev spend guard.
 Real cost is computed from the provider's reported token usage after a call

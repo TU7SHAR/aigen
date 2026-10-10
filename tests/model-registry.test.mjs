@@ -19,10 +19,10 @@ test("default model is a GA (non-deprecated) model", () => {
   assert.notEqual(info.status, "deprecated");
 });
 
-test("Veo 3.1 Lite is present but flagged deprecated and NOT recommended", () => {
+test("Veo 3.1 Lite is present, routed to the veo adapter, NOT recommended, with shutdown date", () => {
   const veo = VIDEO_MODELS["veo-3.1-lite"];
   assert.ok(veo);
-  assert.equal(veo.status, "deprecated");
+  assert.equal(veo.providerImpl, "veo");
   assert.equal(veo.recommended, false);
   assert.equal(veo.shutdownDate, "2026-10-22");
 });
@@ -44,8 +44,9 @@ test("deprecationWarning fires only for a deprecated default", () => {
   // default (Omni) → no warning
   assert.equal(deprecationWarning(), null);
   const prev = process.env.VIDEO_MODEL;
+  // Veo Lite is preview with a shutdown date → a heads-up warning (not a block).
   process.env.VIDEO_MODEL = "veo-3.1-lite";
-  assert.match(deprecationWarning() || "", /deprecated/i);
+  assert.match(deprecationWarning() || "", /shutdown/i);
   if (prev === undefined) delete process.env.VIDEO_MODEL;
   else process.env.VIDEO_MODEL = prev;
 });
