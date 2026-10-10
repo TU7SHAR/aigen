@@ -33,7 +33,7 @@ export default function Home() {
         <div className="mono-meta mt-6 flex flex-wrap gap-x-5 gap-y-1">
           <span>720P / 1080P</span>
           <span>9:16 · 16:9</span>
-          <span>OMNI FLASH</span>
+          <span>AI VIDEO</span>
           <span>FREE MOCK MODE BY DEFAULT</span>
         </div>
       </section>
