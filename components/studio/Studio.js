@@ -105,37 +105,67 @@ export default function Studio() {
       .catch(() => {});
   }, []);
 
-  // Auto-generated prompt derived from the form (mirrors the server builder).
-  const autoPrompt = useMemo(() => {
-    const dir = {
-      luxury: "Elegant, premium cinematic ad with a slow push-in and soft lighting.",
-      bold: "High-energy, punchy ad with quick camera moves and vivid color.",
-      minimal: "Clean studio ad on a neutral background with steady motion.",
-      "product-demo": "Clear product demo highlighting key features with orbiting motion.",
-      "problem-solution": "Problem-then-solution narrative resolving with the product.",
-    }[form.template];
-    const parts = [
-      `Create a ${form.durationSeconds}-second product advertisement video for ${
-        form.productName || "the product"
-      }${form.brand ? ` by ${form.brand}` : ""}.`,
-      dir,
-    ];
-    if (form.description) parts.push(`Product context: ${form.description}.`);
-    if (form.offer) parts.push(`Highlight this offer visually: ${form.offer}.`);
-    parts.push(
-      image
-        ? "Use the provided reference image as the exact product; keep packaging, logo, label text, shape and colors unchanged."
-        : "Keep any depicted product plausible; do not invent logos or label text."
-    );
-    parts.push(
-      "Avoid readable text/logos/prices inside the footage; leave room for overlays."
-    );
-    if (form.cta) parts.push(`Leave a calm final beat for a CTA overlay ("${form.cta}").`);
-    return parts.join(" ");
-  }, [form, image]);
+  // SINGLE SOURCE OF TRUTH: the displayed prompt is the SERVER's compiled prompt
+  // from /api/creative/preview — not a client approximation. Debounced so edits
+  // to any creative field refresh it. No paid call (preview compiles only).
+  const [serverPreview, setServerPreview] = useState(null); // { finalVideoPrompt, preflight, entityType, generationMode, creativeBrief, scenePlan }
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const hasName = form.productName.trim().length > 0;
+    const t = setTimeout(async () => {
+      if (!hasName) {
+        if (!cancelled) setServerPreview(null);
+        return;
+      }
+      if (!cancelled) setPreviewLoading(true);
+      try {
+        const res = await fetch("/api/creative/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...form,
+            durationSeconds: Number(form.durationSeconds),
+            image: image ? { data: image.base64, mimeType: image.mimeType } : undefined,
+            productProfile: imported?.productProfile || undefined,
+            brandProfile: imported?.brandProfile || undefined,
+            brandInfluence: imported?.brandInfluence || "balanced",
+            entityType: imported?.entityType || undefined,
+            concept: imported?.concept || undefined,
+            sourceImageMeta: image ? { hintText: image.name, url: image.name } : undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!cancelled && res.ok) setServerPreview(data);
+      } catch {
+        /* preview is best-effort; generation still validates server-side */
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [form, image, imported]);
 
   const editingPrompt = promptEdit !== null;
-  const promptPreview = editingPrompt ? promptEdit : autoPrompt;
+  const promptPreview = editingPrompt
+    ? promptEdit
+    : serverPreview?.finalVideoPrompt || "";
+
+  // Entity-aware field labels: SaaS/service/creator users shouldn't see
+  // "Product name / Product image" as if they sell a physical item.
+  const entity = imported?.entityType || serverPreview?.entityType || "";
+  const isPhysical = /physical_product|ecommerce/.test(entity);
+  const labels = isPhysical
+    ? { name: "Product name *", image: "Product image" }
+    : entity.includes("creator") || entity.includes("personal_brand")
+      ? { name: "Creator / brand name *", image: "Profile / brand visual" }
+      : entity
+        ? { name: "Name *", image: "Primary visual" }
+        : { name: "Product / brand name *", image: "Primary visual" };
 
   const onPickFile = useCallback(async (file) => {
     setError("");
@@ -313,7 +343,7 @@ export default function Studio() {
           )}
           {/* Upload */}
           <section>
-            <label className="eyebrow mb-2 block">Product image</label>
+            <label className="eyebrow mb-2 block">{labels.image}</label>
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -376,7 +406,7 @@ export default function Studio() {
 
           {/* Fields */}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Product name *">
+            <Field label={labels.name}>
               <input
                 className="input"
                 value={form.productName}
@@ -484,11 +514,18 @@ export default function Studio() {
             </Field>
           </div>
 
-          {/* Prompt preview */}
-          <Field label="Prompt preview (editable)">
+          {/* Prompt preview — this is the EXACT server-compiled prompt */}
+          <Field label="Prompt preview (exact server prompt, editable)">
+            {serverPreview && !editingPrompt && (
+              <div className="mono-meta mb-1">
+                {serverPreview.entityType} · {serverPreview.generationMode}
+                {previewLoading ? " · updating…" : ""}
+              </div>
+            )}
             <textarea
               className="input min-h-28 font-mono text-xs"
               value={promptPreview}
+              placeholder={previewLoading ? "Compiling creative plan…" : "Enter a name to see the plan."}
               onChange={(e) => setPromptEdit(e.target.value)}
             />
             {editingPrompt && (
@@ -497,7 +534,7 @@ export default function Studio() {
                 className="mt-1 text-xs text-accent underline"
                 onClick={() => setPromptEdit(null)}
               >
-                Reset to auto-generated prompt
+                Reset to the server-generated prompt
               </button>
             )}
           </Field>
@@ -511,15 +548,40 @@ export default function Studio() {
               <span>{String(form.durationSeconds).padStart(2, "0")}:00 SEC</span>
               <span className="text-right">{form.resolution.toUpperCase()}</span>
               <span>{form.aspectRatio}</span>
-              <span className="text-right">OMNI FLASH</span>
+              <span className="text-right">
+                {(status?.model?.label || "MODEL").toUpperCase()}
+              </span>
             </div>
+
+            {/* Creative readiness (from the server preflight). Blocks generation
+                on obvious problems so credits aren't wasted. */}
+            {serverPreview?.preflight && (
+              <div className="mb-3 border-t border-line pt-3">
+                {serverPreview.preflight.readyForPaidGeneration ? (
+                  <div className="mono-meta" style={{ color: "var(--accent)" }}>
+                    ✓ CREATIVE READY
+                  </div>
+                ) : (
+                  <div className="mono-meta">⚠ NOT READY</div>
+                )}
+                {serverPreview.preflight.blockers?.map((b, i) => (
+                  <p key={i} className="mt-1 text-xs" style={{ color: "var(--danger, #c00)" }}>
+                    • {b}
+                  </p>
+                ))}
+                {serverPreview.preflight.warnings?.slice(0, 2).map((w, i) => (
+                  <p key={i} className="mt-1 text-xs text-muted">• {w}</p>
+                ))}
+              </div>
+            )}
+
             <div className="mb-4 flex items-center justify-between border-t border-line pt-3">
               <span className="mono-meta">Est. cost</span>
               <span className="font-semibold text-accent">{estCostLabel}</span>
             </div>
             <button
               onClick={generate}
-              disabled={processing}
+              disabled={processing || serverPreview?.preflight?.readyForPaidGeneration === false}
               className="btn btn-primary w-full justify-between"
             >
               {processing ? (

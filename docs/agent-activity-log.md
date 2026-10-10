@@ -384,3 +384,40 @@
   metadata/comments); setting VIDEO_MODEL flows through config→registry→cost
   with no code change. Lint clean; 58/58 tests pass; build OK.
 - **Branch/PR:** `feat/env-driven-model-config` → `main`.
+
+## 2026-10-11 — PR A: creative contract correctness (source→generation data flow)
+
+- **Asked:** External review (and the user's own analysis) found the extracted
+  info wasn't controlling the video: user edits could be overwritten by scraped
+  data, offer/CTA/description/benefits never reached the prompt, the selected
+  concept was only a style label, and the Studio showed a client-side prompt
+  that diverged from the server's. Fix the contract first (no job queue yet).
+- **Verified the claims in code first:** compile.js spread `productProfile` AFTER
+  user fields (overwrote edits); promptComposer took offer/cta as params but
+  never used them. Both true.
+- **Did:**
+  - compile.js: productProfile is now the BASE; user-edited name/brand/
+    description/offer/cta OVERRIDE it (definedOnly). Pass concept + merged
+    offer/cta into the composer.
+  - promptComposer.js: inject extracted facts into the actual prompt — "What it
+    is" (description), concept communication intent (conceptMessage: how-it-works
+    vs brand-intro vs offer vs trust-proof etc.), top benefits + differentiators
+    (grounded, "do not invent"), audience, and an offer + CTA final-beat block.
+    trust-proof explicitly forbids inventing results/returns/guarantees.
+  - Studio.js: removed the client autoPrompt; the prompt preview now comes from
+    /api/creative/preview (debounced), so the displayed prompt == the server
+    prompt. Added a creative-readiness panel from the server preflight and
+    DISABLE Generate when preflight has blockers. Entity-aware field labels
+    (no "Product name/image" for SaaS/service/creator). Model label from status.
+  - Tests: +7 creative-contract (edits win; description/offer/cta reach prompt;
+    benefits/diffs grounded; concept changes prompt; deterministic preview==gen;
+    financial no-invention).
+- **Verified:** lint clean; 65/65 tests pass; build OK. Live preview proof:
+  BhavishAI Pro (user edit) wins over OLD NAME; description/offer/CTA present;
+  how-it-works intent present; zero AFFIRMATIVE physical language (only
+  negations). No paid calls.
+- **NOT in this PR (next):** PR B (verified-asset pipeline, rendered-screenshot
+  DesignProfile, image recovery) and PR C (real hybrid production routing,
+  durable jobs, spend reservations). The "hybrid" label still maps to the Gemini
+  provider — honestly flagged, fixed in PR C.
+- **Branch/PR:** `feat/creative-contract-correctness` → `main`.
