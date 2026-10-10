@@ -384,3 +384,27 @@
   metadata/comments); setting VIDEO_MODEL flows through config→registry→cost
   with no code change. Lint clean; 58/58 tests pass; build OK.
 - **Branch/PR:** `feat/env-driven-model-config` → `main`.
+
+## 2026-10-11 — Multi-model video routing + Veo adapter
+
+- **Asked:** Enable Veo 3.1 Lite (can't afford Omni right now). Whatever model
+  is set in env, the code must route to the correct model/adapter and run only
+  that one — add support for accepting any video model from env.
+- **Did:**
+  - `lib/ai/veoProvider.js`: real Veo adapter (generateVideos → poll
+    getVideosOperation → download), same VideoProvider contract as Omni.
+    Verified Veo's long-running API shape against ai.google.dev/gemini-api/docs/veo.
+  - `lib/ai/index.js`: router — in real mode it reads the active model's
+    `providerImpl` from the registry and constructs ONLY that adapter
+    (gemini-omni | veo | mock). No wasted work for other providers.
+  - `lib/ai/modelRegistry.js`: Veo entries (veo-3.1-lite $0.05/s, veo-3.1-fast,
+    veo-3.1) with providerImpl 'veo' + env-overridable apiModelId
+    (VEO_API_MODEL_ID). Shutdown-date heads-up warning (not a block) so Veo Lite
+    is usable now.
+  - `.env.example` + docs/MODELS.md: documented supported ids + routing.
+  - Tests: +6 provider-router (mock/omni/veo/unknown routing) + fixed 2 registry
+    tests for the new Veo status.
+- **Verified:** VIDEO_MODEL=veo-3.1-lite → veo adapter ($0.05/s, heads-up
+  warning); gemini-omni → gemini adapter; mock → mock. Lint clean; 64/64 tests
+  pass; build OK. Veo adapter UNVERIFIED against a live key.
+- **Branch/PR:** `feat/veo-provider-and-model-router` → `main`.
