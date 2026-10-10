@@ -179,3 +179,16 @@
   client-rendered pages without structured data still rely on the (unverified)
   Firecrawl fallback; enrichment quality depends on the Flash-Lite model/tier.
 - **Branch/PR:** `feat/source-intelligence-ai-enrichment` → `main`.
+
+## 2026-10-11 — Fix enrichment model (3.1 Flash Lite)
+
+- **Asked:** Enrichment 404'd — `gemini-2.5-flash-lite` is no longer available
+  to new users. User asked for "gemini flash 3.1 lite"; their dashboard lists
+  both Gemini 3.1 Flash Lite and 3.5 Flash Lite as available.
+- **Did:** Changed the default `SOURCE_ENRICHMENT_MODEL` from
+  `gemini-2.5-flash-lite` to `gemini-3.1-flash-lite` in `lib/config.js`,
+  `.env.example` and `docs/CRAWLER.md`. Enrichment already degrades gracefully
+  if a model is unavailable, so import still works regardless.
+- **Verified:** no stale 2.5 refs remain in source; lint clean; 39/39 tests
+  pass; build OK. Live model resolution needs the user's key (not pastable).
+- **Branch/PR:** `fix/enrichment-model-gemini-3.5-flash-lite` → `main`.
