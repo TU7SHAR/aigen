@@ -14,48 +14,13 @@
  * within the plan's execution limit (documented in docs/ARCHITECTURE.md).
  */
 
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { generateRequestSchema } from "@/lib/validation.js";
 import { compileCreativeRequest } from "@/lib/creative/compile.js";
 import { getVideoProvider, ProviderError } from "@/lib/ai/index.js";
 import { getModelInfo, deprecationWarning } from "@/lib/ai/modelRegistry.js";
-import { safeFetch } from "@/lib/crawl/safeFetch.js";
+import { resolveReferenceAsset } from "@/lib/assets/resolveReference.js";
 
-const REF_MIME = {
-  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-  ".webp": "image/webp", ".svg": "image/svg+xml",
-};
-
-/**
- * Resolve a reference asset URL into { data(base64), mimeType }.
- * - Local stored asset (/imported-assets/..): read from public dir.
- * - Remote URL: SSRF-safe fetch.
- * Returns null on failure (generation proceeds without a reference).
- */
-async function resolveReferenceAsset(url) {
-  try {
-    if (url.startsWith("/imported-assets/")) {
-      const safeName = path.basename(url); // prevent traversal
-      const full = path.join(process.cwd(), "public", "imported-assets", safeName);
-      const buf = await fs.readFile(full);
-      const mime = REF_MIME[path.extname(safeName).toLowerCase()] || "image/png";
-      if (mime === "image/svg+xml") return null; // raster-only for the model
-      return { data: buf.toString("base64"), mimeType: mime };
-    }
-    if (/^https?:\/\//i.test(url)) {
-      const res = await safeFetch(url, { accept: "image/*", asBuffer: true, maxBytes: 8 * 1024 * 1024, timeoutMs: 10_000 });
-      const mime = (res.contentType || "").split(";")[0].trim().toLowerCase();
-      if (!mime.startsWith("image/") || mime === "image/svg+xml") return null;
-      if (!(res.body instanceof Buffer)) return null;
-      return { data: res.body.toString("base64"), mimeType: mime };
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
 import {
   isPaidGenerationEnabled,
   getProviderName,
@@ -250,6 +215,9 @@ export async function POST(request) {
       model: result.model,
       mimeType: result.mimeType,
       usage: result.usage ?? null,
+      // Diagnostic: what the provider actually received (reference image, prompt
+      // preview). Lets us prove the selected reference reached the model.
+      receivedRequest: result.receivedRequest ?? null,
       video: `data:${result.mimeType};base64,${result.videoBase64}`,
       cost: {
         // Pre-call estimate (used only for the budget guard / UI preview).
