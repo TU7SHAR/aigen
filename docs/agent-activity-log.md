@@ -241,3 +241,45 @@
   no dedicated logo SVG yet (documented).
 - **Branch/PR:** `feat/editorial-industrial-design-system` → base
   `feat/product-url-import-creative-pipeline` (stacked on the open PR #3).
+
+## 2026-10-11 — MakeAdClips rename + entity-aware creative engine (fix BhavishAI→bottle)
+
+- **Asked:** Paid video of BhavishAI (correctly imported as SaaS) came out as a
+  physical dropper bottle. Make entity type drive the whole creative engine;
+  one canonical prompt; a preflight gate; SVG support; wire imported assets into
+  generation; rename AdForge → MakeAdClips. No paid calls in dev/tests.
+- **Root cause:** entityType was detected but `buildCreativePlan` /
+  `composeVideoPrompt` were hard-coded for physical products ("product-film",
+  "bottle/box geometry", "cap/lid", "the product as the clean hero"), so a SaaS
+  was forced into a packshot scene.
+- **Did:**
+  - `lib/creative/entityStrategies.js`: per-entity strategies (physical/saas/
+    app/service/business/agency/creator/personal_brand/course/event/unknown)
+    with subject noun, scene vocabulary, fidelity rule, extra negatives,
+    generation mode, allowsPhysicalLanguage.
+  - Rewrote planner + promptComposer to dispatch on strategy; physical language
+    only for physical products; non-physical gets explicit "NOT a physical
+    product" + entity negatives.
+  - `lib/creative/compile.js`: single `compileCreativeRequest` used by BOTH
+    `/api/creative/preview` (new, no paid call) and `/api/generate`, so the
+    previewed prompt == the model's prompt. Added `runPreflight` quality gate;
+    generate returns 422 PREFLIGHT_BLOCKED on entity/prompt contradiction,
+    creator-without-asset, or very low confidence.
+  - SVG: keep useful SVGs (logo/illustration role, isVector); asset store
+    handles image/svg+xml with sanitizeSvg (strip scripts/handlers/external
+    refs). Imported hero now flows as referenceAssetUrl → resolved server-side
+    (local file or SSRF-safe fetch) so crawler images actually reach the model.
+  - Renamed AdForge → MakeAdClips across UI/docs/metadata/UA/download filename
+    (history log left intact).
+  - Docs: new VISUAL_INTELLIGENCE.md; honest implemented-vs-scoped status.
+- **Verified:** lint clean; 49/49 tests pass (10 new entity-creative incl. the
+  permanent BhavishAI→bottle regression + prompt-lint per entity); build OK.
+  Live preview (NO paid gen): BhavishAI → entityType saas, mode hybrid, preflight
+  ready, prompt says "NOT a physical product", zero affirmative physical terms;
+  physical product → image_to_video with physical fidelity. Context ~713 chars,
+  prompt ~2.7k chars.
+- **Scoped / NOT done (honest):** headless-browser screenshots + computed-style
+  DesignProfile; Remotion deterministic composition; AI multimodal image/design
+  classification + cheap keyframe preview; full AssetLibrary entity. DesignProfile
+  is threaded through but currently populated only from brand signals/enrichment.
+- **Branch/PR:** `feat/makeadclips-entity-aware-creative` → `main`.

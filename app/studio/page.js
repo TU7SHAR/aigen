@@ -1,7 +1,7 @@
 import Studio from "@/components/studio/Studio.js";
 
 export const metadata = {
-  title: "Studio — AdForge",
+  title: "Studio — MakeAdClips",
   description: "Generate a product video ad from a photo.",
 };
 

@@ -79,6 +79,9 @@ export default function Studio() {
       brandInfluence: payload.brandInfluence,
       entityType: payload.entityType,
       concept: payload.concept,
+      // The chosen hero image becomes the server-resolved generation reference
+      // (fixes the bug where a crawler-found image never reached the model).
+      referenceAssetUrl: payload.heroUrl || null,
     });
     setImportedImages(
       [payload.heroUrl, ...(payload.gallery || [])].filter(Boolean)
@@ -187,12 +190,16 @@ export default function Studio() {
       brandInfluence: imported?.brandInfluence || "balanced",
       entityType: imported?.entityType || undefined,
       concept: imported?.concept || undefined,
+      // Use the chosen imported image as the generation reference when the user
+      // hasn't manually uploaded one — resolved server-side.
+      referenceAssetUrl:
+        !image && imported?.referenceAssetUrl ? imported.referenceAssetUrl : undefined,
       // Hint the source-image classifier (e.g. imported poster/ad vs packshot).
       sourceImageMeta: image
         ? { hintText: image.name, url: image.name }
         : undefined,
     };
-    const downloadName = `adforge-${Date.now()}.mp4`;
+    const downloadName = `makeadclips-${Date.now()}.mp4`;
 
     try {
       const res = await fetch("/api/generate", {

@@ -17,12 +17,12 @@ function Logo() {
     <Link
       href="/"
       className="flex items-center gap-2 font-semibold tracking-tight"
-      aria-label="AdForge Studio home"
+      aria-label="MakeAdClips Studio home"
     >
       <span className="text-accent" aria-hidden="true">
         ◩
       </span>
-      <span>AdForge</span>
+      <span>MakeAdClips</span>
       <span className="mono-meta !text-ink hidden sm:inline">STUDIO</span>
     </Link>
   );

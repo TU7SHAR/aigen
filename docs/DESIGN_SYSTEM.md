@@ -2,7 +2,7 @@
 
 _Last updated: 2026-10-10_
 
-AdForge Studio's visual identity is deliberately distinct from BhavishAI's
+MakeAdClips Studio's visual identity is deliberately distinct from BhavishAI's
 mystical ivory/gold + purple. This product reads as **creative-studio /
 production software**: ink, warm bone and a single rationed signal orange, with
 a video **frame / crop-mark** motif and monospace technical metadata.
@@ -20,7 +20,7 @@ mechanical inversion — toggled by the `.dark` class on `<html>`.
 
 **Theme is driven by [`next-themes`](https://github.com/pacocoursey/next-themes)**
 (`attribute="class"`, `defaultTheme="system"`, `enableSystem`,
-`disableTransitionOnChange`, `storageKey="adforge-theme"`), wired through
+`disableTransitionOnChange`, `storageKey="makeadclips-theme"`), wired through
 `components/theme/ThemeProvider.js` in the root layout. The library injects a
 pre-paint script, so there is no theme flash and no SSR/CSR hydration mismatch
 on the `<html>` class. The user's choice (Light / Dark / System) persists in

@@ -1,4 +1,4 @@
-# Architecture — AdForge Studio
+# Architecture — MakeAdClips Studio
 
 **This is a Next.js 16 App Router application** (React 19, Tailwind v4). It is
 *not* the earlier standalone Node/HTTP/FFmpeg/fal.ai prototype that some
