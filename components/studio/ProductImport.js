@@ -46,6 +46,8 @@ export default function ProductImport({ onImported }) {
   const [data, setData] = useState(null); // import result
   const [concepts, setConcepts] = useState([]);
   const [chosenConcept, setChosenConcept] = useState(null);
+  const [conceptsStale, setConceptsStale] = useState(false);
+  const [conceptsLoading, setConceptsLoading] = useState(false);
   const [edits, setEdits] = useState({});
   const [heroUrl, setHeroUrl] = useState(null);
   const [removed, setRemoved] = useState(new Set());
@@ -89,34 +91,77 @@ export default function ProductImport({ onImported }) {
       setRemoved(new Set());
 
       // Only generate concepts once we understand the entity well enough.
-      // Below the threshold we ask the user to review first (no generic
-      // "Product Demo / Lifestyle" guesses for something we didn't understand).
+      // Below the threshold we ask the user to review first.
       const confidence = json.extractionConfidence ?? 0;
       if (confidence >= 0.45) {
-        const cRes = await fetch("/api/creative/concepts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            product: { ...p, entityType: json.entityType },
-            brand: json.brandProfile,
-            design: json.designProfile,
-            entity: json.entityProfile,
-            entityType: json.entityType,
-            hasUsableImage: Boolean(p.primaryImage || p.productImages?.length),
-          }),
+        await loadConcepts(json, {
+          name: p.name || "",
+          brand: p.brand || "",
+          description: p.description || "",
+          offer: p.offer || "",
         });
-        const cJson = await cRes.json();
-        setConcepts(cJson.concepts || []);
-        setChosenConcept(cJson.concepts?.[0]?.id || null);
       } else {
         setConcepts([]);
         setChosenConcept(null);
       }
+      setConceptsStale(false);
       setPhase("review");
     } catch (e) {
       clearInterval(timer);
       setPhase("error");
       setError(`Import failed: ${e.message}`);
+    }
+  }
+
+  // Fetch concepts using the CURRENT edited values (so corrections flow into
+  // the AI concept reasoning). `editsNow` lets the import path pass fresh values
+  // before `edits` state has settled.
+  async function loadConcepts(json, editsNow) {
+    const p = json.productProfile || {};
+    const e = editsNow || edits;
+    setConceptsLoading(true);
+    try {
+      const cRes = await fetch("/api/creative/concepts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          // merge user edits over the scraped profile so concepts reflect
+          // corrections (the whole point of the review screen).
+          product: {
+            ...p,
+            name: e.name || p.name,
+            brand: e.brand || p.brand,
+            description: e.description || p.description,
+            offer: e.offer || p.offer,
+            entityType: json.entityType,
+          },
+          brand: json.brandProfile,
+          design: json.designProfile,
+          entity: json.entityProfile,
+          entityType: json.entityType,
+          objective: e.objective || undefined,
+          hasUsableImage: Boolean(heroUrl || p.primaryImage || p.productImages?.length),
+        }),
+      });
+      const cJson = await cRes.json();
+      setConcepts(cJson.concepts || []);
+      setChosenConcept(cJson.concepts?.[0]?.id || null);
+      setConceptsStale(false);
+    } finally {
+      setConceptsLoading(false);
+    }
+  }
+
+  async function regenerateConcepts() {
+    if (data) await loadConcepts(data, edits);
+  }
+
+  // Editing a field that affects creative reasoning marks concepts stale so the
+  // user knows to regenerate (gap: corrections must invalidate stale plans).
+  function editField(key, value) {
+    setEdits((prev) => ({ ...prev, [key]: value }));
+    if (["name", "brand", "description", "offer", "objective"].includes(key)) {
+      setConceptsStale(true);
     }
   }
 
@@ -145,7 +190,11 @@ export default function ProductImport({ onImported }) {
         brand: edits.brand,
         description: edits.description,
         offer: edits.offer,
-        template: concept?.template || "minimal",
+        // AI concepts carry no `template` — their visual direction drives the
+        // scene plan directly (see planner). `template` only seeds neutral
+        // base lighting/camera; leave it undefined for AI concepts rather than
+        // forcing a generic "minimal" creative. Legacy concepts may set one.
+        template: concept?.template,
       },
     });
   }
@@ -268,10 +317,10 @@ export default function ProductImport({ onImported }) {
         {/* editable fields */}
         <div className="space-y-3">
           <Field label="Product name">
-            <input className="input" value={edits.name} onChange={(e) => setEdits({ ...edits, name: e.target.value })} />
+            <input className="input" value={edits.name} onChange={(e) => editField("name", e.target.value)} />
           </Field>
           <Field label="Brand">
-            <input className="input" value={edits.brand} onChange={(e) => setEdits({ ...edits, brand: e.target.value })} />
+            <input className="input" value={edits.brand} onChange={(e) => editField("brand", e.target.value)} />
           </Field>
           <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
             <Field label="Price">
@@ -282,10 +331,10 @@ export default function ProductImport({ onImported }) {
             </Field>
           </div>
           <Field label="Description">
-            <textarea className="input min-h-24" value={edits.description} onChange={(e) => setEdits({ ...edits, description: e.target.value })} />
+            <textarea className="input min-h-24" value={edits.description} onChange={(e) => editField("description", e.target.value)} />
           </Field>
           <Field label="Offer">
-            <input className="input" value={edits.offer} onChange={(e) => setEdits({ ...edits, offer: e.target.value })} placeholder="e.g. 20% off" />
+            <input className="input" value={edits.offer} onChange={(e) => editField("offer", e.target.value)} placeholder="e.g. 20% off" />
           </Field>
         </div>
 
@@ -376,7 +425,20 @@ export default function ProductImport({ onImported }) {
       )}
       {concepts.length > 0 && (
         <div>
-          <span className="eyebrow mb-2 block">Choose an ad concept</span>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="eyebrow">Choose an ad concept</span>
+            {(conceptsStale || conceptsLoading) && (
+              <button
+                type="button"
+                onClick={regenerateConcepts}
+                disabled={conceptsLoading}
+                className="flex items-center gap-1.5 text-xs text-accent hover:underline disabled:opacity-60"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${conceptsLoading ? "animate-spin" : ""}`} />
+                {conceptsLoading ? "Updating…" : "You edited details — regenerate concepts"}
+              </button>
+            )}
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {concepts.map((c) => (
               <button
