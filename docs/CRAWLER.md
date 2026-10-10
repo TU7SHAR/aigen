@@ -63,7 +63,7 @@ noise (`/privacy`, `/terms`, `/blog`…), capped by `MAX_SITE_PAGES`.
 ### AI semantic enrichment (`lib/ai/enrich.js`)
 
 A cheap Gemini TEXT model (`SOURCE_ENRICHMENT_MODEL`, default
-`gemini-2.5-flash-lite`) receives the **reduced** context and returns strict
+`gemini-3.1-flash-lite`) receives the **reduced** context and returns strict
 JSON (via `responseSchema`) with nullable fields. System instruction forbids
 inventing prices/discounts/guarantees/claims; unsupported fields come back null/
 []. Degrades gracefully (returns no enrichment, not an error) when disabled or
