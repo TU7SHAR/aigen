@@ -534,3 +534,28 @@
   (lighting/camera authored by Gemini) are NOT built — flagged, not claimed.
   Rendered screenshots are code-complete but unverified without a browser host.
 - **Branch/PR:** `feat/visual-intelligence` → `main`.
+
+## 2026-10-11 — Enable rendered screenshots (Playwright) — VERIFIED working
+
+- **Asked:** Install the Playwright browser so rendered capture actually works
+  (it was code-complete but unverified in PR #18).
+- **Did:** Added `playwright` dependency; installed Chromium headless shell
+  (`npx playwright install chromium`) — it downloaded a fallback ubuntu24.04
+  build and **launches successfully in this sandbox**. Wired an OPTIONAL
+  rendered-capture pass into importSource (opt-in via ENABLE_RENDERED_CAPTURE):
+  captures a screenshot, verifies+stores it as a `website_hero` asset, and
+  merges computed styles into the DesignProfile (source becomes
+  "html_css+rendered"). Documented the flag in .env.example.
+- **VERIFIED (not just claimed):** standalone capture of example.com produced a
+  58KB PNG + computed fonts. Full live import with ENABLE_RENDERED_CAPTURE=true
+  produced a `website_hero` asset whose PNG exists on disk (58427 bytes), design
+  source "html_css+rendered", and a rendered_screenshot reference — i.e. an
+  image-poor site now yields a real usable visual asset (no-image recovery).
+  Lint clean; 92/92 tests; build OK. No paid calls.
+- **Honest caveats:** (1) the Chromium binary lives in /opt/playwright (outside
+  the repo); any host that enables capture must run `npx playwright install
+  chromium` — the app degrades gracefully if it's absent. (2) capture is
+  opt-in/off by default (it's heavier than a plain fetch). (3) Playwright flagged
+  the OS as "not officially supported" and used a fallback build; works here but
+  production hosting should use a supported base image or a browser service.
+- **Branch/PR:** `feat/enable-rendered-screenshots` → `main`.
