@@ -9,6 +9,7 @@ import {
   Check,
   Palette,
 } from "lucide-react";
+import BrandMark from "@/components/layout/BrandMark.js";
 
 const STAGES = [
   "Normalizing URL…",
@@ -223,7 +224,7 @@ export default function ProductImport({ onImported }) {
       <div className="card p-4">
         <div className="eyebrow mb-1">We understood this as</div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-accent" aria-hidden="true">◩</span>
+          <BrandMark className="h-4 w-4 shrink-0 text-accent" />
           <span className="break-anywhere text-base font-semibold sm:text-lg">{ENTITY_LABELS[data.entityType] || "Website / Business"}</span>
           <span className="mono-meta ml-auto">CONF {conf.toFixed(2)}</span>
         </div>

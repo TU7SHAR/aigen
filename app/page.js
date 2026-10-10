@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { ArrowRight, Link2, Zap, ShieldCheck, Film } from "lucide-react";
+import BrandMark from "@/components/layout/BrandMark.js";
 
 export default function Home() {
   return (
     <main className="flex-1">
       {/* Hero */}
       <section className="mx-auto max-w-5xl px-4 pt-14 pb-14 sm:px-6 sm:pt-24 sm:pb-20">
-        <p className="eyebrow mb-5 sm:mb-6">◩ AI Product Video Studio</p>
+        <p className="eyebrow mb-5 inline-flex items-center gap-1.5 sm:mb-6">
+          <BrandMark className="h-3.5 w-3.5 text-accent" />
+          AI Product Video Studio
+        </p>
         <h1 className="display max-w-3xl text-3xl sm:text-5xl lg:text-6xl">
           Turn one product photo into a{" "}
           <span className="text-accent">professional</span> video ad.

@@ -1,0 +1,10 @@
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Apple touch icon: full-bleed square (iOS applies its own corner mask),
+       mark slightly inset for safe margins. Ink background, orange mark. -->
+  <rect width="180" height="180" fill="#111214"/>
+  <g stroke="#FF5A24" stroke-width="13" stroke-linecap="square">
+    <path d="M44 62V44h18"/>
+    <path d="M136 118v18h-18"/>
+  </g>
+  <path d="M72 56 L124 90 L72 124 Z" fill="#FF5A24"/>
+</svg>
