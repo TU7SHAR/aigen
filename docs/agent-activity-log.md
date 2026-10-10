@@ -460,3 +460,41 @@
   DesignProfile, image verification, SVG, no-image recovery) and PR 3 (real
   production routing, keyframes, output QA) + PR 4 (durable jobs/spend).
 - **Branch/PR:** `feat/dynamic-creative-intelligence` → `main`.
+
+## 2026-10-11 — Concept drives production (6 integration gaps)
+
+- **Asked (the 6 gaps before visual intelligence):** (1) AI concepts lacked a
+  template → ProductImport defaulted to "minimal"; (2) concept's visual
+  direction/subject must drive the SCENE PLAN, not just the message; (3) only
+  honor recommendedProductionMethod when actually implemented; (4) regenerate/
+  invalidate concepts when the user edits offering/description/objective;
+  (5) verify industry/category reaches concept generator + compiler; (6) keep
+  only technical/safety hardcoding.
+- **Did:**
+  - Gap 2: `buildCreativePlan` now takes `concept` and builds the scene plan FROM
+    the concept's visualIdea/proposedSubject/centralMessage (falls back to the
+    entity-safe generic vocab only when absent). Two different concepts now
+    produce different scene plans (tested).
+  - Gap 3: new `lib/creative/productionMethods.js` capability map +
+    `resolveProductionMethod`. image/text_to_video are implemented and honored;
+    hybrid/motion_graphics fall back with an honest note; avatar_presenter has
+    no fallback → hard preflight blocker (we don't fake presenters). compile
+    surfaces `productionMethod`; preflight blocks/warns accordingly.
+  - Gap 1: AI concepts no longer forced through a generic "minimal" template;
+    `template` is only a neutral lighting/camera seed now, left undefined for AI
+    concepts (Studio keeps a safe default so validation holds).
+  - Gap 4: ProductImport marks concepts stale on edits to name/brand/
+    description/offer/objective and offers "regenerate concepts", which refetches
+    using the CURRENT edited values (corrections flow into AI reasoning).
+  - Gap 5: concepts API already receives entity/design/industry; loadConcepts
+    merges user edits over the scraped profile before sending.
+  - Gap 6: no new industry→creative tables; productionMethods is a
+    capability/safety contract, not a creative preset.
+  - Tests: +9 (production method resolution/blocking; concept→scene plan;
+    duration→beats). 81/81 pass. Lint + build clean. No paid calls.
+- **Honest status:** hybrid/motion_graphics/avatar are capability-mapped but NOT
+  implemented (they fall back or block) — that's the point: no fake modes. The
+  real deterministic compositor + avatar/voice providers are PR 5/6 territory,
+  not claimed here. Visual intelligence (rendered screenshots, DesignProfile,
+  image verification, SVG raster, no-image recovery) is the NEXT PR.
+- **Branch/PR:** `feat/concept-drives-production` → `main`.
