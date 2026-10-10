@@ -24,12 +24,29 @@ Real cost is computed from the provider's reported token usage after a call
 (see `docs/COSTS.md`). Confirm live pricing at
 <https://ai.google.dev/gemini-api/docs/pricing>.
 
+## Everything is env-driven (no hardcoded model ids at call sites)
+
+Model ids are read ONLY through config, with a single set of fallbacks in
+`lib/config.js` → `DEFAULTS`:
+
+| Purpose | Env var | Default |
+|---|---|---|
+| Video generation | `VIDEO_MODEL` | `gemini-omni-1.1-flash` |
+| Source enrichment (cheap text) | `SOURCE_ENRICHMENT_MODEL` | `gemini-3.1-flash-lite` |
+| Pre-call estimate rate | `VIDEO_USD_PER_SECOND` | active model's registry rate → 0.10 |
+| Per-model rate override | `VIDEO_USD_PER_SECOND__<ID>` | registry rate |
+
+Call sites (`geminiProvider.js`, `enrich.js`) only call `getVideoModel()` /
+`getEnrichmentModel()`. `modelRegistry.getDefaultModelId()` delegates to
+`config.getVideoModel()`, so there is exactly one place a default lives.
+
 ## Switching models
 
-Set `VIDEO_MODEL` to a registry id. If the id maps to the existing
-`gemini-omni` provider impl, no code changes are needed. A model with a
-different API shape (e.g. a Veo-style `generateContent` model) requires a new
-provider adapter behind the same `VideoProvider` contract — the workflow,
+Set `VIDEO_MODEL` (in `.env.local`) to any id. If it maps to the existing
+`gemini-omni` provider impl, **no code changes are needed** — even an id not in
+the registry resolves (treated as a Gemini Omni Interactions model). A model
+with a different API shape (e.g. a Veo-style `generateContent` model) requires a
+new provider adapter behind the same `VideoProvider` contract — the workflow,
 routes and UI stay unchanged.
 
 The `/api/generate` status probe returns the active model and a

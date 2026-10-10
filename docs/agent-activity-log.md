@@ -361,3 +361,26 @@
   shows GA default with no warning and warns on a deprecated override. No paid
   calls.
 - **Branch/PR:** `feat/model-registry-and-product-vision` → `main`.
+
+## 2026-10-11 — All model ids env-driven (single source of truth)
+
+- **Asked:** Make all models changeable from .env; no direct model calls from code.
+- **Assessment:** Call sites were already env-driven (getVideoModel/
+  getEnrichmentModel), but the default model-id strings were DUPLICATED as
+  hardcoded fallbacks in both config.js and modelRegistry.js, and the registry
+  defaults weren't env-overridable. Fixed the duplication.
+- **Did:**
+  - `lib/config.js`: added `DEFAULTS` (the only place default model ids live);
+    getVideoModel/getEnrichmentModel read env → DEFAULTS.
+  - `lib/ai/modelRegistry.js`: `getDefaultModelId()` now delegates to
+    `getVideoModel()` (no second fallback); per-model estimate rate is
+    env-overridable via `VIDEO_USD_PER_SECOND__<ID>`; unknown env model ids
+    resolve to a usable gemini-omni record.
+  - `.env.example`: grouped model-selection vars, documented env-driven policy
+    and per-model rate override.
+  - docs/MODELS.md: env-var table + "no hardcoded ids at call sites".
+  - Tests: +2 (VIDEO_MODEL env drives all readers; per-model rate override).
+- **Verified:** no model literals at call sites (only config DEFAULTS + registry
+  metadata/comments); setting VIDEO_MODEL flows through config→registry→cost
+  with no code change. Lint clean; 58/58 tests pass; build OK.
+- **Branch/PR:** `feat/env-driven-model-config` → `main`.

@@ -62,3 +62,27 @@ test("cost estimate reflects the registry rate when no env override", () => {
 test("listModels returns all registry entries", () => {
   assert.equal(listModels().length, Object.keys(VIDEO_MODELS).length);
 });
+
+test("VIDEO_MODEL env drives the default everywhere (no hardcoded fallback dup)", () => {
+  const prev = process.env.VIDEO_MODEL;
+  // An id NOT in the registry still resolves (treated as gemini-omni).
+  process.env.VIDEO_MODEL = "gemini-future-9-flash";
+  assert.equal(getDefaultModelId(), "gemini-future-9-flash");
+  assert.equal(getModelInfo().id, "gemini-future-9-flash");
+  assert.equal(getModelInfo().providerImpl, "gemini-omni");
+  if (prev === undefined) delete process.env.VIDEO_MODEL;
+  else process.env.VIDEO_MODEL = prev;
+});
+
+test("per-model rate override via env is honored", () => {
+  const prevModel = process.env.VIDEO_MODEL;
+  const key = "VIDEO_USD_PER_SECOND__GEMINI_OMNI_1_1_FLASH";
+  const prevRate = process.env[key];
+  process.env.VIDEO_MODEL = "gemini-omni-1.1-flash";
+  process.env[key] = "0.07";
+  assert.equal(getModelInfo().usdPerSecond720p, 0.07);
+  if (prevRate === undefined) delete process.env[key];
+  else process.env[key] = prevRate;
+  if (prevModel === undefined) delete process.env.VIDEO_MODEL;
+  else process.env.VIDEO_MODEL = prevModel;
+});
