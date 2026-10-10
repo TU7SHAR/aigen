@@ -1,6 +1,6 @@
 # Design System — "Editorial Industrial"
 
-_Last updated: 2026-10-10_
+_Last updated: 2026-10-11_
 
 MakeAdClips Studio's visual identity is deliberately distinct from BhavishAI's
 mystical ivory/gold + purple. This product reads as **creative-studio /
@@ -88,12 +88,37 @@ root layout, so every route shares one navigation.
 - `.input` — token-driven fields with an orange focus ring.
 - `.accent-chip` / `.accent-dot` — small status accents.
 
+## Brand mark & logo
+
+The MakeAdClips mark is a **bold play / clip triangle anchored by two diagonal
+crop-marks** (top-left + bottom-right) in signal orange — the product→clip
+story told with the frame motif. It's deliberately simple so it stays legible
+at 16px (one dominant shape + two accents).
+
+- **`components/layout/BrandMark.js`** — the canonical in-app SVG mark. Uses
+  `currentColor` (inherits `text-accent`); pass `tile` for the rounded ink
+  badge. Used in the header logo lockup, the landing eyebrow, and the import
+  entity card (it replaced the old `◩` glyph stand-in everywhere).
+- **`app/icon.svg`** — the same mark as the browser-tab favicon (SVG, `sizes=any`).
+- **`app/favicon.ico`** — 16/32/48 multi-res ICO fallback for legacy clients.
+- **`app/apple-icon.png`** — 180×180 iOS home-screen icon (full-bleed; iOS masks
+  corners).
+- **`app/opengraph-image.png`** + **`app/twitter-image.png`** — 1200×630 social
+  cards (mark + wordmark + tagline + mono metadata, on ink).
+- **`app/manifest.js`** — PWA manifest (name, ink `theme_color`, `/brand/icon-192.png`
+  + `/brand/icon-512.png`).
+- Icon source SVGs live in `public/brand/`; rasters are regenerated with `sharp`
+  (+ `png-to-ico` for the `.ico`). All auto-wired by Next's metadata file
+  conventions — the layout sets `metadataBase`, OpenGraph/Twitter and
+  `appleWebApp`, but lists no icons manually.
+
 ## Brand motif: video frame / crop marks
 
 - `.frame` draws two L-corners (top-left + bottom-right) on any container.
 - `.frame-corners` + four `<span class="corner tl|tr|bl|br" />` children draws
   all four corners. Applied to upload zones, the generated-video card, the empty
-  result state, and the landing hero graphic. Also the logo lockup (`◩`).
+  result state, and the landing hero graphic. The logo lockup now uses the real
+  `<BrandMark>` SVG (the same crop-mark + triangle language).
 
 ## Motion
 
@@ -113,8 +138,11 @@ overshoot animations.
 
 - Theme preference persists only in `localStorage` (no account sync yet — that
   arrives with auth). "System" follows the OS and updates live.
-- A dedicated SVG logo/favicon using the frame motif is a design direction, not
-  yet shipped as an asset (the `◩` glyph stands in).
+- The brand mark is a flat SVG; an **animated** logo reveal (a natural fit for a
+  video-ad product) is a future direction, not yet built.
+- `metadataBase` defaults to `https://makeadclips.com`; set
+  `NEXT_PUBLIC_SITE_URL` to the real deployment origin so OG/Twitter image URLs
+  resolve correctly in production.
 - `/projects` and `/assets` are themed "coming soon" placeholders
   (`components/layout/ComingSoon.js`) so nav links are live, not dead — the real
   screens ship with persistence/auth.

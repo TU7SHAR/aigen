@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import ThemeToggle from "@/components/theme/ThemeToggle.js";
+import BrandMark from "@/components/layout/BrandMark.js";
 
 const NAV_LINKS = [
   { href: "/studio", label: "Create" },
@@ -19,9 +20,7 @@ function Logo() {
       className="flex items-center gap-2 font-semibold tracking-tight"
       aria-label="MakeAdClips Studio home"
     >
-      <span className="text-accent" aria-hidden="true">
-        ◩
-      </span>
+      <BrandMark className="h-7 w-7 shrink-0 text-accent" tile />
       <span>MakeAdClips</span>
       <span className="mono-meta !text-ink hidden sm:inline">STUDIO</span>
     </Link>

@@ -1,0 +1,14 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MakeAdClips">
+  <!-- MakeAdClips brand mark: a bold play/clip triangle with two diagonal
+       crop-marks (the frame motif), signal orange on ink. Kept deliberately
+       simple so it stays legible at 16px: one dominant shape (the triangle)
+       plus two corner accents, high contrast, minimal detail. -->
+  <rect width="32" height="32" rx="7" fill="#111214"/>
+  <!-- Two diagonal crop-marks (top-left + bottom-right), the frame motif -->
+  <g stroke="#FF5A24" stroke-width="2.6" stroke-linecap="square">
+    <path d="M6.5 10V6.5H10"/>
+    <path d="M25.5 22v3.5H22"/>
+  </g>
+  <!-- Dominant play / clip triangle, optically centered -->
+  <path d="M12.5 10 L23 16 L12.5 22 Z" fill="#FF5A24"/>
+</svg>

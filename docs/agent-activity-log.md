@@ -1,5 +1,52 @@
 # Agent activity log
 
+## 2026-10-11 — MakeAdClips brand identity: favicon, logo mark, icons & metadata
+
+- **Asked:** "add favicon and all related to brand identity … the brand is not
+  clear make the brand clearer and choose the icon via thorough research. name
+  is makeadclips."
+- **Interpreted:** The product was renamed to MakeAdClips (PR #8) but the brand
+  was still *unclear*: the logo was a placeholder `◩` glyph, the favicon was the
+  stock Next.js/Vercel default, and there was no icon system (no `icon.svg`,
+  apple-icon, OG/Twitter cards, or manifest) and thin metadata. Researched
+  favicon best practice (simple, high-contrast, recognizable at 16px; a
+  simplified logo mark; multi-size SVG+ICO+apple+PWA set — launchvault.dev,
+  bluehost.com, ramotion.com) and the AI-video-ad category's visual language
+  (play / clip / film-frame marks — lumalabs.ai, nim.video, capcut.com). Read
+  the bundled Next 16 metadata file-convention docs for exact file names.
+- **Did:** Designed a distinctive mark — a bold signal-orange **play/clip
+  triangle anchored by two diagonal crop-marks** (the product→clip story in the
+  existing frame motif), tuned to read at 16px. Shipped it everywhere:
+  `app/icon.svg` (tab favicon), regenerated `app/favicon.ico` (16/32/48 ICO,
+  replacing the stock default), `app/apple-icon.png` (180), `app/manifest.js`
+  (PWA + `/brand/icon-192|512.png`), and `app/opengraph-image.png` +
+  `app/twitter-image.png` (1200×630 cards with mark + wordmark + tagline + mono
+  metadata). Added `components/layout/BrandMark.js` (canonical in-app SVG mark,
+  `currentColor`, optional ink `tile`) and used it in the header logo lockup,
+  the landing eyebrow, and the import entity card — retiring the `◩` glyph.
+  Enriched `app/layout.js` metadata (`metadataBase`, `applicationName`, title
+  template, keywords, OpenGraph, Twitter `summary_large_image`, `appleWebApp`).
+  Icon source SVGs live in `public/brand/`; rasters generated with `sharp` +
+  `png-to-ico` (build-time only, `--no-save` — package.json untouched). Fixed
+  the stale "AdForge" comment in `globals.css`; documented
+  `NEXT_PUBLIC_SITE_URL` in `.env.example`.
+- **Files affected:** `app/icon.svg` (new), `app/favicon.ico`,
+  `app/apple-icon.png` (new), `app/opengraph-image.png` (new),
+  `app/twitter-image.png` (new), `app/manifest.js` (new), `app/layout.js`,
+  `app/page.js`, `app/globals.css`, `components/layout/BrandMark.js` (new),
+  `components/layout/AppHeader.js`, `components/studio/ProductImport.js`,
+  `public/brand/{og-source.svg,apple-source.svg,icon-192.png,icon-512.png}` (new),
+  `.env.example`, `docs/DESIGN_SYSTEM.md`.
+- **Impact:** The brand is now unmistakable and consistent from favicon →
+  header logo → landing → OG card. Verified against a production build: lint
+  clean, 49/49 tests pass, build OK; `/icon.svg`, `/favicon.ico`,
+  `/apple-icon.png`, `/opengraph-image.png`, `/twitter-image.png`,
+  `/manifest.webmanifest` all serve 200 with correct content-types; `<head>`
+  carries the full icon/manifest/OG/Twitter/apple set; the header renders the
+  real `<BrandMark>` SVG and the `◩` glyph is gone. Mark checked rendered at
+  16/32/256px.
+- **Branch/PR:** `feat/makeadclips-brand-identity` → `main`.
+
 ## 2026-10-11 — Harden importer: Source Intelligence + AI enrichment + context compiler
 
 - **Asked:** The importer returned empty fields and "No image" for real sites,
