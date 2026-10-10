@@ -12,7 +12,6 @@ import {
 } from "../lib/creative/sourceImage.js";
 import { buildCreativePlan } from "../lib/creative/planner.js";
 import { composeVideoPrompt } from "../lib/creative/promptComposer.js";
-import { generateConcepts } from "../lib/creative/concepts.js";
 
 test("source image: a poster/ad is classified as a reference", () => {
   const r = classifySourceImageHeuristic({ url: "https://x.com/summer-sale-poster.jpg" });
@@ -74,12 +73,20 @@ test("prompt: no brand -> avoids generic AI silver look explicitly", () => {
   assert.match(prompt, /silver/i); // negative mention of generic silver
 });
 
-test("concepts: luxury vs playful brands get different concept sets", () => {
-  const lux = generateConcepts({ product: { name: "Perfume" }, brand: { visualStyle: "luxury editorial", confidence: 0.9, primaryColors: ["#111"] } });
-  const playful = generateConcepts({ product: { name: "Serum" }, brand: { visualStyle: "playful colorful gen-z", confidence: 0.9, primaryColors: ["#f0f"] } });
-  const luxTitles = lux.concepts.map((c) => c.title).join("|");
-  const playTitles = playful.concepts.map((c) => c.title).join("|");
-  assert.notEqual(luxTitles, playTitles);
-  assert.match(luxTitles, /Midnight|Editorial|Minimal/);
-  assert.match(playTitles, /Color Pop|Playful|Breakdown/);
+test("concepts: smart generator falls back to entity-neutral directions without a key", async () => {
+  // No GEMINI_API_KEY in test env → AI path is skipped, deterministic fallback
+  // runs. It must be entity-neutral (no hardcoded industry creative).
+  const prevKey = process.env.GEMINI_API_KEY;
+  const prevFlag = process.env.ENABLE_SOURCE_ENRICHMENT;
+  delete process.env.GEMINI_API_KEY;
+  process.env.ENABLE_SOURCE_ENRICHMENT = "false";
+  const { generateConceptsSmart } = await import("../lib/creative/concepts.js");
+  const r = await generateConceptsSmart({ product: { name: "Perfume" }, entityType: "physical_product" });
+  assert.equal(r.origin, "fallback");
+  assert.ok(r.concepts.length >= 3);
+  // fallback carries no per-industry palette/style assumption
+  assert.ok(r.concepts.every((c) => c.origin === "fallback"));
+  if (prevKey !== undefined) process.env.GEMINI_API_KEY = prevKey;
+  if (prevFlag === undefined) delete process.env.ENABLE_SOURCE_ENRICHMENT;
+  else process.env.ENABLE_SOURCE_ENRICHMENT = prevFlag;
 });

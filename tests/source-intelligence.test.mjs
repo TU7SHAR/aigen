@@ -13,7 +13,7 @@ import { mergeProfiles } from "../lib/crawl/merge.js";
 import { extractStructured } from "../lib/crawl/structured.js";
 import { cleanProductContent } from "../lib/crawl/clean.js";
 import { compileGenerationContext, contextSize } from "../lib/creative/generationContext.js";
-import { generateConcepts } from "../lib/creative/concepts.js";
+import { fallbackConcepts } from "../lib/creative/concepts.js";
 import {
   SAAS_HOMEPAGE_HTML,
   SERVICE_HTML,
@@ -135,21 +135,25 @@ test("compileGenerationContext: small + excludes raw crawl data", () => {
   assert.equal(ctx.identity.name, "BhavishAI");
 });
 
-// --- Entity-aware concepts ---
-test("generateConcepts: SaaS gets non-product concepts", () => {
-  const r = generateConcepts({ product: { name: "BhavishAI" }, entityType: "saas" });
-  const titles = r.concepts.map((c) => c.title).join("|");
-  assert.ok(!/Packshot|Lifestyle Context/.test(titles));
-  assert.match(titles, /Product Reveal|Feature Flow|Outcome|Problem/);
+// --- Deterministic concept FALLBACK (entity-neutral; no hardcoded industry
+//     creative). The AI path is tested separately with mocks. ---
+test("fallback concepts: entity-neutral, no hardcoded industry titles", () => {
+  const saas = fallbackConcepts({ product: { name: "BhavishAI" }, entityType: "saas" });
+  const product = fallbackConcepts({ product: { name: "Serum" }, entityType: "ecommerce_product" });
+  // Same generic directions regardless of industry — NOT a per-industry table.
+  assert.deepEqual(saas.map((c) => c.id), product.map((c) => c.id));
+  assert.ok(saas.length >= 3);
 });
 
-test("generateConcepts: creator gets creator concepts", () => {
-  const r = generateConcepts({ product: { name: "Alex" }, entityType: "creator" });
-  const titles = r.concepts.map((c) => c.title).join("|");
-  assert.match(titles, /Authority|Social Proof|Offer|Transformation/);
+test("fallback concepts: non-physical entity never proposes a physical object", () => {
+  const saas = fallbackConcepts({ product: { name: "BhavishAI" }, entityType: "saas" });
+  const subjects = saas.map((c) => c.proposedSubject).join(" ").toLowerCase();
+  assert.ok(!/product itself as the hero|bottle|packshot|packaging/.test(subjects));
+  assert.match(subjects, /brand/);
 });
 
-test("generateConcepts: product still gets product/brand concepts", () => {
-  const r = generateConcepts({ product: { name: "Serum" }, entityType: "ecommerce_product", brand: { visualStyle: "luxury", confidence: 0.9, primaryColors: ["#111"] } });
-  assert.ok(r.concepts.length >= 3);
+test("fallback concepts: physical product may use product-as-hero", () => {
+  const p = fallbackConcepts({ product: { name: "Serum" }, entityType: "physical_product" });
+  const subjects = p.map((c) => c.proposedSubject).join(" ").toLowerCase();
+  assert.match(subjects, /product itself as the hero/);
 });
