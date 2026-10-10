@@ -20,6 +20,7 @@ import { NextResponse } from "next/server";
 import { generateRequestSchema } from "@/lib/validation.js";
 import { compileCreativeRequest } from "@/lib/creative/compile.js";
 import { getVideoProvider, ProviderError } from "@/lib/ai/index.js";
+import { getModelInfo, deprecationWarning } from "@/lib/ai/modelRegistry.js";
 import { safeFetch } from "@/lib/crawl/safeFetch.js";
 
 const REF_MIME = {
@@ -280,9 +281,17 @@ export async function POST(request) {
 
 export async function GET() {
   // Lightweight capability/status probe for the UI.
+  const model = getModelInfo();
   return NextResponse.json({
     provider: getProviderName(),
     paidGenerationEnabled: isPaidGenerationEnabled(),
     devSpendLimitUsd: getDevSpendLimitUsd(),
+    model: {
+      id: model.id,
+      label: model.label,
+      status: model.status,
+      usdPerSecond720p: model.usdPerSecond720p,
+    },
+    modelWarning: deprecationWarning(),
   });
 }

@@ -283,3 +283,34 @@
   classification + cheap keyframe preview; full AssetLibrary entity. DesignProfile
   is threaded through but currently populated only from brand signals/enrichment.
 - **Branch/PR:** `feat/makeadclips-entity-aware-creative` → `main`.
+
+## 2026-10-11 — Product vision steering + video model registry
+
+- **Asked:** Clarify that MakeAdClips is NOT a video editor (no timelines/layers/
+  manual scene editing); keep the import→understand→recommend→approve→generate→
+  preview flow; keep a clean provider abstraction so models can be compared and
+  switched; don't couple to Veo 3.1 Lite (shutdown 2026-10-22); evaluate on
+  usable output not price; no paid calls without approval.
+- **Assessment:** Mostly already aligned — the `VideoProvider` abstraction +
+  factory already decouple the workflow from the model, and nothing adds editor
+  surfaces. Two real gaps closed, cheaply.
+- **Did:**
+  - `.kiro/steering/product-vision.md` (always-included): encodes the vision,
+    the "not a video editor" guardrails (storyboard stays read-only), the model
+    policy (GA default, don't couple to Veo Lite, judge on usable output), and
+    cost discipline — so all future work (incl. other agents) stays on-vision.
+  - `lib/ai/modelRegistry.js`: metadata registry for comparison/switching
+    (price/sec, resolutions, status, shutdownDate, recommended, qualityNotes).
+    Omni = GA default/recommended; Veo 3.1 Lite = deprecated reference entry
+    only. `getModelInfo/listModels/getDefaultModelId/deprecationWarning`.
+  - Cost estimator now reads the registry rate (env still overrides).
+  - `/api/generate` status probe returns the active model + a modelWarning when
+    the default is deprecated (verified live).
+  - `docs/MODELS.md`.
+- **Did NOT build (out of scope / not requested):** no editor features; no live
+  multi-model A/B UI; no new provider adapter (Veo is deprecated — wiring it
+  would be wasted effort). Registry is the additive seam for a future GA model.
+- **Verified:** lint clean; 56/56 tests pass (7 new); build OK; status probe
+  shows GA default with no warning and warns on a deprecated override. No paid
+  calls.
+- **Branch/PR:** `feat/model-registry-and-product-vision` → `main`.
