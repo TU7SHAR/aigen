@@ -1,6 +1,6 @@
 # Design System — "Editorial Industrial"
 
-_Last updated: 2026-10-09_
+_Last updated: 2026-10-10_
 
 AdForge Studio's visual identity is deliberately distinct from BhavishAI's
 mystical ivory/gold + purple. This product reads as **creative-studio /
@@ -12,25 +12,64 @@ a video **frame / crop-mark** motif and monospace technical metadata.
 
 ## Tokens (semantic, role-based)
 
-Defined in `app/globals.css` as CSS variables and exposed to Tailwind via
-`@theme inline` (so utilities like `bg-surface`, `text-ink`, `border-line`,
-`text-accent` work). Dark mode is its own elevation ladder — **not** a mechanical
-inversion — toggled by the `.dark` class (set from `prefers-color-scheme` by a
-pre-paint script in `app/layout.js`).
+Defined in `app/globals.css` as CSS variables (`--background`, `--surface`,
+`--foreground`, …) and exposed to Tailwind via `@theme inline` (so utilities
+like `bg-surface`, `text-ink`, `border-line`, `text-accent`, `text-danger`,
+`bg-success-surface` work). Dark mode is its own elevation ladder — **not** a
+mechanical inversion — toggled by the `.dark` class on `<html>`.
 
-| Role | Light | Dark | Tailwind |
+**Theme is driven by [`next-themes`](https://github.com/pacocoursey/next-themes)**
+(`attribute="class"`, `defaultTheme="system"`, `enableSystem`,
+`disableTransitionOnChange`, `storageKey="adforge-theme"`), wired through
+`components/theme/ThemeProvider.js` in the root layout. The library injects a
+pre-paint script, so there is no theme flash and no SSR/CSR hydration mismatch
+on the `<html>` class. The user's choice (Light / Dark / System) persists in
+`localStorage`; **System** reacts live to OS changes.
+
+| Role | Light | Dark | Token / Tailwind |
 |---|---|---|---|
-| Background (warm bone / near-black) | `#F7F6F2` | `#0D0E10` | `bg-bg` |
-| Surface | `#FFFFFF` | `#151619` | `bg-surface` |
-| Raised surface | `#FFFFFF` | `#1D1E22` | `bg-raised` |
-| Primary text (ink) | `#111214` | `#F5F4EF` | `text-ink` |
-| Secondary text | `#6C6D70` | `#97989E` | `text-muted` |
-| Border (architectural) | `#DFDFDB` | `#292A2F` | `border-line` |
-| **Signal orange** | `#FF5A24` | `#FF6840` | `text-accent` / `bg-accent` |
-| Accent hover | `#E94816` | `#FF7A54` | `bg-accent-hover` |
+| Background (warm bone / near-black) | `#F7F6F2` | `#0D0E10` | `--background` · `bg-bg` |
+| Surface (white / charcoal) | `#FFFFFF` | `#151619` | `--surface` · `bg-surface` |
+| Elevated surface | `#FFFFFF` | `#1D1E22` | `--surface-elevated` · `bg-raised` |
+| Primary text (ink) | `#111214` | `#F5F4EF` | `--foreground` · `text-ink` |
+| Secondary text | `#6C6D70` | `#97989E` | `--foreground-muted` · `text-muted` |
+| Border (architectural) | `#DFDFDB` | `#292A2F` | `--border` · `border-line` |
+| **Signal orange** (accent) | `#FF5A24` | `#FF6840` | `--accent` · `text-accent` / `bg-accent` |
+| Accent hover | `#E94816` | `#FF7A54` | `--accent-hover` · `bg-accent-hover` |
+| Danger | `#C0341D` | `#FF7A63` | `--danger` · `text-danger` (+ `bg-danger-surface`) |
+| Warning | `#9A6400` | `#E3B65A` | `--warning` · `text-warning` (+ `bg-warning-surface`) |
+| Success | `#1F7A4D` | `#5FCF93` | `--success` · `text-success` (+ `bg-success-surface`) |
+| Media canvas (both themes) | `#0B0B0D` | `#0B0B0D` | `--canvas` · `.media-canvas` |
 
 Orange is used **sparingly** — CTAs, selected states, the frame motif, key
-metrics, generation/AI accents — never as a fill-everything gradient.
+metrics, generation/AI accents — never as a fill-everything gradient. The
+**media canvas** (`--canvas`) stays neutral-dark in *both* themes so video /
+creative previews read correctly even in light mode. Detected **customer brand
+colors** are confined to the brand-profile / concept / preview surfaces (inline
+`style`); they never recolor global navigation or theme tokens.
+
+### Theme control & responsive nav
+
+`components/theme/ThemeToggle.js` is a compact Light/Dark/System dropdown
+(lucide `Sun`/`Moon`/`Monitor`) with an accessible label; it mount-gates
+theme-dependent icons via `useSyncExternalStore` (`components/theme/useMounted.js`)
+to avoid hydration mismatches. It lives in the shared `components/layout/AppHeader.js`
+— inline in the desktop top nav, and inside the mobile hamburger menu
+(`variant="inline"`, a 3-up radio group). The header is rendered once in the
+root layout, so every route shares one navigation.
+
+### Responsive & accessibility conventions
+
+- Mobile-first; no horizontal overflow at 320–1440px (`html/body { overflow-x: hidden }`
+  as a backstop). Verified at 320/375/390/430/768/1024/1280/1440.
+- Interactive controls target ≥44px (`.btn`/`.input` `min-height: 44px`); inputs
+  use ≥16px font to avoid iOS zoom-on-focus.
+- Safe-area insets via `viewportFit=cover` + `env(safe-area-inset-*)` on the
+  header and page bottoms.
+- Status uses semantic `.alert` / `.alert-danger|warning|success` (never
+  fixed-width); long strings wrap via `.break-anywhere`.
+- Visible `:focus-visible` rings; `prefers-reduced-motion` disables animation
+  and `next-themes` `disableTransitionOnChange` keeps theme switches flash-free.
 
 ## Typography
 
@@ -72,7 +111,10 @@ overshoot animations.
 
 ## Known limitations
 
-- Theme follows the OS only; there is no in-app light/dark toggle yet (easy to
-  add — flip the `.dark` class on `<html>`).
+- Theme preference persists only in `localStorage` (no account sync yet — that
+  arrives with auth). "System" follows the OS and updates live.
 - A dedicated SVG logo/favicon using the frame motif is a design direction, not
   yet shipped as an asset (the `◩` glyph stands in).
+- `/projects` and `/assets` are themed "coming soon" placeholders
+  (`components/layout/ComingSoon.js`) so nav links are live, not dead — the real
+  screens ship with persistence/auth.

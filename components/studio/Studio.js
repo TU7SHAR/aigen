@@ -220,10 +220,10 @@ export default function Studio() {
   const processing = phase === "processing";
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8">
       {/* Status banner */}
       {status && (
-        <div className="card mb-6 flex items-start gap-2 px-4 py-3 text-sm text-muted">
+        <div className="card mb-6 flex items-start gap-2 px-4 py-3 text-sm text-muted break-anywhere">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
           <div>
             Active provider: <b>{status.provider}</b>.{" "}
@@ -245,25 +245,33 @@ export default function Studio() {
         </div>
       )}
 
-      {/* Create-from mode switcher */}
+      {/* Create-from mode switcher (segmented control; full-width on mobile) */}
       <div className="mb-6">
         <div className="eyebrow mb-3">Create from</div>
-        <div className="inline-flex rounded-xl border border-line bg-surface p-1">
+        <div
+          role="tablist"
+          aria-label="Create from"
+          className="grid w-full grid-cols-2 gap-1 rounded-xl border border-line bg-surface p-1 sm:inline-grid sm:w-auto"
+        >
           <button
+            role="tab"
+            aria-selected={mode === "url"}
             onClick={() => setMode("url")}
-            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition ${
+            className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium ${
               mode === "url" ? "bg-accent text-accent-contrast" : "text-muted hover:text-ink"
             }`}
           >
-            <Link2 className="h-4 w-4" /> Product URL
+            <Link2 className="h-4 w-4" aria-hidden="true" /> Product URL
           </button>
           <button
+            role="tab"
+            aria-selected={mode === "manual"}
             onClick={() => setMode("manual")}
-            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition ${
+            className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium ${
               mode === "manual" ? "bg-accent text-accent-contrast" : "text-muted hover:text-ink"
             }`}
           >
-            <Upload className="h-4 w-4" /> Upload manually
+            <Upload className="h-4 w-4" aria-hidden="true" /> Upload manually
           </button>
         </div>
       </div>
@@ -520,12 +528,9 @@ export default function Studio() {
           </div>
 
           {error && (
-            <div
-              className="card flex items-start gap-2 px-4 py-3 text-sm"
-              style={{ borderLeft: "3px solid var(--accent)" }}
-            >
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-              <span className="text-ink">{error}</span>
+            <div className="alert alert-danger" role="alert">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="break-anywhere">{error}</span>
             </div>
           )}
 
@@ -537,7 +542,8 @@ export default function Studio() {
                   <span className="mono-meta !text-ink">Mock — placeholder, not real generation</span>
                 </div>
               )}
-              <div className="frame-corners relative overflow-hidden rounded-brand bg-black">
+              {/* Media canvas stays neutral-dark in both themes for media fidelity. */}
+              <div className="frame-corners media-canvas relative overflow-hidden rounded-brand">
                 <span className="corner tl" />
                 <span className="corner tr" />
                 <span className="corner bl" />

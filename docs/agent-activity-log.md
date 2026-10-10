@@ -1,5 +1,54 @@
 # Agent activity log
 
+## 2026-10-10 — Light/Dark/System theme system + responsive redesign
+
+- **Asked:** Replace the effectively dark-only UI with a real theming system
+  (Light/Dark/System, persisted, no flash) and make the whole app responsive
+  (320px → large desktop), with a shared nav, semantic design tokens, consistent
+  component states, accessibility, safe areas, and no horizontal scroll.
+- **Interpreted:** Audited the repo first. The premise about default "indigo
+  SaaS colors" did **not** match this codebase — it already had a semantic,
+  token-based "Editorial Industrial" system (no `indigo`/`zinc` anywhere). The
+  real gaps vs. the brief were: (1) theme followed the OS only via a hand-rolled
+  pre-paint script — no explicit toggle, no persistence; (2) each page had its
+  own ad-hoc header, no mobile nav; (3) responsive gaps (studio two-column that
+  didn't collapse, fixed 4-col gallery, non-stacking button rows, no safe
+  areas). Chose `next-themes` (per the brief's preference) for robust,
+  flash-free, hydration-safe theming. The hook's referenced
+  `docs/DOCS_MAINTENANCE.md`, `PROJECT.md`, and `commands/` do not exist in this
+  repo, so I updated the docs that do (activity log, DESIGN_SYSTEM, README).
+- **Did:** Installed `next-themes@0.4.6`. Added `components/theme/`
+  (`ThemeProvider`, `ThemeToggle`, `useMounted`) and `components/layout/`
+  (`AppHeader` with embedded mobile nav, `ComingSoon`). Rendered the shared
+  header + provider once in the root layout; removed the per-page headers and
+  the old inline theme script. Expanded `app/globals.css` with the full semantic
+  token set (`--surface-elevated`, `--danger/warning/success` + surfaces,
+  `--canvas`, `--overlay`), 44px tap targets, ≥16px inputs, safe-area spacing,
+  `:focus-visible` rings, `prefers-reduced-motion`, restrained transitions,
+  `overflow-x` guards, `.alert*` and `.skeleton`/`.media-canvas`/`.break-anywhere`
+  helpers. Migrated landing, studio, and product-import to responsive layouts
+  (fluid headings, stacking buttons, single-column mobile forms, responsive
+  2/3/4-col gallery, segmented mode tabs, media canvas stays dark in both
+  themes). Added themed `/projects` and `/assets` placeholders so nav links are
+  never dead. Added `viewport` export (`viewportFit=cover`, adaptive themeColor).
+- **Files affected:** `app/globals.css`, `app/layout.js`, `app/page.js`,
+  `app/studio/page.js`, `app/projects/page.js` (new), `app/assets/page.js` (new),
+  `components/theme/ThemeProvider.js` (new), `components/theme/ThemeToggle.js`
+  (new), `components/theme/useMounted.js` (new),
+  `components/layout/AppHeader.js` (new), `components/layout/ComingSoon.js` (new),
+  `components/studio/Studio.js`, `components/studio/ProductImport.js`,
+  `package.json`, `package-lock.json`, `README.md`, `docs/DESIGN_SYSTEM.md`.
+- **Impact:** Light mode is now a full experience; theme toggle sits in the
+  top nav (desktop) and the hamburger menu (mobile). Verified with a headless
+  browser against a production build: toggle present with accessible label;
+  `adforge-theme=dark` persists across reload and applies the dark token
+  ladder (`body` bg `rgb(13,14,16)`); **zero** horizontal overflow at
+  320/375/390/430/768/1024/1280/1440 on `/` and `/studio`; mobile menu exposes
+  all 4 links + the 3-way theme control; **no console/hydration warnings** on
+  home or studio. `npm run lint` clean, `npm test` 26/26 pass, `npm run build`
+  succeeds (pre-existing `lib/assets/store.js` fs-trace warning is unrelated).
+- **Branch/PR:** `feat/theme-system-responsive-ui` → `main`.
+
 ## 2026-10-09 — Milestone 1: Photo → Gemini AI video studio
 
 - **Asked:** Build the product on the existing Next.js stack using the Gemini

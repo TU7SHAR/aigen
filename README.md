@@ -62,7 +62,10 @@ actionable error instead of pretending generation succeeded.
 
 ## What works right now
 
-- [x] Landing page + responsive AI video studio (mobile/desktop).
+- [x] Landing page + responsive AI video studio (mobile/tablet/desktop,
+      verified 320–1440px, no horizontal overflow).
+- [x] Light / Dark / System theme (via `next-themes`) with a toggle in the
+      shared header; preference persists in `localStorage`, no theme flash.
 - [x] Drag-and-drop product image upload (PNG/JPEG/WEBP, max 5 MB) with preview.
 - [x] Product name, brand, description, offer, CTA fields.
 - [x] Five ad templates: Luxury, Bold, Minimal, Product Demo, Problem→Solution.
