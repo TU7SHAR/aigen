@@ -5,23 +5,23 @@ export default function Home() {
   return (
     <main className="flex-1">
       {/* Hero */}
-      <section className="mx-auto max-w-5xl px-6 pt-24 pb-20">
-        <p className="eyebrow mb-6">◩ AI Product Video Studio</p>
-        <h1 className="display max-w-3xl text-5xl sm:text-6xl">
+      <section className="mx-auto max-w-5xl px-4 pt-14 pb-14 sm:px-6 sm:pt-24 sm:pb-20">
+        <p className="eyebrow mb-5 sm:mb-6">◩ AI Product Video Studio</p>
+        <h1 className="display max-w-3xl text-3xl sm:text-5xl lg:text-6xl">
           Turn one product photo into a{" "}
           <span className="text-accent">professional</span> video ad.
         </h1>
-        <p className="mt-6 max-w-xl text-lg text-muted">
+        <p className="mt-5 max-w-xl text-base text-muted sm:mt-6 sm:text-lg">
           AdForge Studio reads your product page, understands your brand, plans
           the concept, and generates a commercial-grade ad with Google&apos;s
           Gemini — not a generic AI template.
         </p>
 
-        <div className="mt-9 flex flex-wrap items-center gap-3">
-          <Link href="/studio" className="btn btn-primary">
+        <div className="mt-8 flex flex-col gap-3 sm:mt-9 sm:flex-row sm:flex-wrap sm:items-center">
+          <Link href="/studio" className="btn btn-primary w-full sm:w-auto">
             Open the Studio <ArrowRight className="h-4 w-4" />
           </Link>
-          <a href="#how" className="btn btn-secondary">
+          <a href="#how" className="btn btn-secondary w-full sm:w-auto">
             How it works
           </a>
         </div>
@@ -35,13 +35,13 @@ export default function Home() {
       </section>
 
       {/* Framed hero graphic — the brand motif in action */}
-      <section className="mx-auto max-w-5xl px-6 pb-24">
+      <section className="mx-auto max-w-5xl px-4 pb-16 sm:px-6 sm:pb-24">
         <div className="frame-corners relative overflow-hidden rounded-brand border border-line bg-surface">
           <span className="corner tl" />
           <span className="corner tr" />
           <span className="corner bl" />
           <span className="corner br" />
-          <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-16 text-center">
+          <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center sm:min-h-64 sm:p-16">
             <Film className="h-8 w-8 text-accent" />
             <p className="eyebrow">Product → Brand → Concept → Film</p>
             <p className="max-w-md text-muted">
@@ -53,7 +53,7 @@ export default function Home() {
       </section>
 
       {/* Features */}
-      <section id="how" className="mx-auto max-w-5xl px-6 pb-28">
+      <section id="how" className="mx-auto max-w-5xl px-4 pb-20 sm:px-6 sm:pb-28">
         <p className="eyebrow mb-6">How it works</p>
         <div className="grid gap-px overflow-hidden rounded-brand border border-line bg-line sm:grid-cols-3">
           <Feature

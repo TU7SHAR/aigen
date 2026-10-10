@@ -1,5 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import ThemeProvider from "@/components/theme/ThemeProvider.js";
+import AppHeader from "@/components/layout/AppHeader.js";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,31 +19,33 @@ export const metadata = {
     "Turn one product photo into a polished AI video ad. Built for ecommerce brands.",
 };
 
-// Dark mode follows the OS preference by toggling the `.dark` class (so our
-// token system — not a mechanical inversion — drives both themes). The inline
-// script runs before paint to avoid a flash of the wrong theme.
-const themeScript = `
-try {
-  var m = window.matchMedia('(prefers-color-scheme: dark)');
-  var apply = function (dark) {
-    document.documentElement.classList.toggle('dark', dark);
-  };
-  apply(m.matches);
-  m.addEventListener('change', function (e) { apply(e.matches); });
-} catch (e) {}
-`;
+// viewportFit=cover enables env(safe-area-inset-*) on notched devices.
+// themeColor adapts the browser chrome to the active theme.
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f6f2" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d0e10" },
+  ],
+};
 
 export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // next-themes writes the theme class to <html> before paint; this
+      // attribute silences the expected server/client class mismatch.
       suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-      </head>
-      <body className="min-h-full flex flex-col bg-bg text-ink">{children}</body>
+      <body className="flex min-h-full flex-col bg-bg text-ink">
+        <ThemeProvider>
+          <AppHeader />
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

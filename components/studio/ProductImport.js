@@ -149,12 +149,17 @@ export default function ProductImport({ onImported }) {
   // ---- render ----
   if (phase === "idle" || phase === "error") {
     return (
-      <div className="card p-6">
-        <label className="mb-2 block text-sm font-medium">Paste your product page</label>
-        <div className="flex gap-2">
+      <div className="card p-4 sm:p-6">
+        <label htmlFor="product-url" className="mb-2 block text-sm font-medium">
+          Paste your product page
+        </label>
+        <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative flex-1">
-            <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Link2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
             <input
+              id="product-url"
+              type="url"
+              inputMode="url"
               className="input pl-9"
               placeholder="https://brand.com/products/product-name"
               value={url}
@@ -164,15 +169,15 @@ export default function ProductImport({ onImported }) {
           <button
             onClick={() => runImport(false)}
             disabled={!url.trim()}
-            className="btn btn-primary disabled:opacity-60"
+            className="btn btn-primary w-full disabled:opacity-60 sm:w-auto sm:shrink-0"
           >
             Import product
           </button>
         </div>
         {error && (
-          <div className="mt-3 flex items-start gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink" style={{ borderLeft: "3px solid var(--accent)" }}>
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{error} You can switch to manual upload instead.</span>
+          <div className="alert alert-danger mt-3" role="alert">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="break-anywhere">{error} You can switch to manual upload instead.</span>
           </div>
         )}
         <p className="mt-3 text-xs text-muted">
@@ -185,7 +190,7 @@ export default function ProductImport({ onImported }) {
 
   if (phase === "crawling") {
     return (
-      <div className="card p-8">
+      <div className="card p-6 sm:p-8">
         <div className="flex items-center gap-3">
           <Loader2 className="h-5 w-5 animate-spin text-accent" />
           <span className="font-medium">{STAGES[stage]}</span>
@@ -217,9 +222,9 @@ export default function ProductImport({ onImported }) {
       {/* What we understood this as */}
       <div className="card p-4">
         <div className="eyebrow mb-1">We understood this as</div>
-        <div className="flex items-center gap-2">
-          <span className="text-accent">◩</span>
-          <span className="text-lg font-semibold">{ENTITY_LABELS[data.entityType] || "Website / Business"}</span>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-accent" aria-hidden="true">◩</span>
+          <span className="break-anywhere text-base font-semibold sm:text-lg">{ENTITY_LABELS[data.entityType] || "Website / Business"}</span>
           <span className="mono-meta ml-auto">CONF {conf.toFixed(2)}</span>
         </div>
         {lowConf && (
@@ -232,9 +237,9 @@ export default function ProductImport({ onImported }) {
       </div>
 
       {warnings.length > 0 && (
-        <div className="card px-4 py-3 text-sm text-ink" style={{ borderLeft: "3px solid var(--accent)" }}>
-          <div className="mono-meta !text-accent mb-1">Review before generating</div>
-          <ul className="mt-1 list-disc pl-5">
+        <div className="alert alert-warning flex-col items-stretch" role="status">
+          <div className="mono-meta !text-warning mb-1">Review before generating</div>
+          <ul className="mt-1 list-disc pl-5 break-anywhere">
             {warnings.map((w, i) => (
               <li key={i}>{w}</li>
             ))}
@@ -242,16 +247,16 @@ export default function ProductImport({ onImported }) {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm text-muted break-anywhere">
           Imported via {obs.crawlProvider} · confidence{" "}
           {(p.extractionConfidence ?? 0).toFixed(2)} · {obs.keptImageCount} images kept
         </div>
         <button
           onClick={() => runImport(true)}
-          className="flex items-center gap-1.5 text-sm text-accent hover:underline"
+          className="flex items-center gap-1.5 self-start text-sm text-accent hover:underline sm:self-auto"
         >
-          <RefreshCw className="h-3.5 w-3.5" /> Refresh product data
+          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Refresh product data
         </button>
       </div>
 
@@ -264,7 +269,7 @@ export default function ProductImport({ onImported }) {
           <Field label="Brand">
             <input className="input" value={edits.brand} onChange={(e) => setEdits({ ...edits, brand: e.target.value })} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
             <Field label="Price">
               <input className="input" value={edits.price} onChange={(e) => setEdits({ ...edits, price: e.target.value })} />
             </Field>
@@ -286,21 +291,22 @@ export default function ProductImport({ onImported }) {
           <div className="aspect-square overflow-hidden rounded-brand border border-line bg-surface">
             {heroUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={heroUrl} alt="Hero" className="h-full w-full object-contain" />
+              <img src={heroUrl} alt="Selected hero product image" loading="lazy" className="h-full w-full object-contain" />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted">No image</div>
             )}
           </div>
           <span className="block text-sm font-medium">Gallery (click to choose hero / remove)</span>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2 min-[400px]:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4">
             {gallery.map((u) => (
               <div key={u} className="group relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={u}
-                  alt="candidate"
+                  alt="Product image candidate"
+                  loading="lazy"
                   onClick={() => setHeroUrl(u)}
-                  className={`aspect-square w-full cursor-pointer rounded-lg border object-contain p-1 ${
+                  className={`aspect-square w-full cursor-pointer rounded-lg border bg-surface object-contain p-1 ${
                     heroUrl === u ? "border-accent ring-2 ring-[color:var(--accent)]" : "border-line"
                   } ${removed.has(u) ? "opacity-30" : ""}`}
                 />
@@ -339,10 +345,10 @@ export default function ProductImport({ onImported }) {
               </span>
             ))}
           </div>
-          <div className="mt-3 flex items-center gap-4 text-sm">
+          <div className="mt-3 flex flex-col gap-3 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
             <label className="flex items-center gap-2">
               Brand influence:
-              <select className="input !w-auto !py-1" value={brandInfluence} onChange={(e) => setBrandInfluence(e.target.value)} disabled={ignoreBrand}>
+              <select className="input !min-h-0 !w-auto !py-1.5" value={brandInfluence} onChange={(e) => setBrandInfluence(e.target.value)} disabled={ignoreBrand}>
                 <option value="low">Low</option>
                 <option value="balanced">Balanced</option>
                 <option value="strong">Strong</option>
@@ -394,11 +400,12 @@ export default function ProductImport({ onImported }) {
         Continue to Ad Studio →
       </button>
 
-      {/* Dev-only debug panel (hidden in production) */}
+      {/* Dev-only debug panel (hidden in production). Collapsible accordion;
+          single column on mobile → two columns from sm; long URLs wrap. */}
       {process.env.NODE_ENV !== "production" && (
         <details className="card px-4 py-3 text-xs text-muted">
           <summary className="mono-meta cursor-pointer">Debug · import internals</summary>
-          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+          <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 break-anywhere sm:grid-cols-2">
             <span>Input → {data.normalizedInputUrl}</span>
             <span>Final → {data.finalUrl}</span>
             <span>Crawler: {obs.crawlProvider}{obs.usedFirecrawl ? " (firecrawl)" : ""}</span>
