@@ -511,7 +511,9 @@ export default function Studio() {
               <span>{String(form.durationSeconds).padStart(2, "0")}:00 SEC</span>
               <span className="text-right">{form.resolution.toUpperCase()}</span>
               <span>{form.aspectRatio}</span>
-              <span className="text-right">OMNI FLASH</span>
+              <span className="text-right">
+                {(status?.model?.label || "MODEL").toUpperCase()}
+              </span>
             </div>
             <div className="mb-4 flex items-center justify-between border-t border-line pt-3">
               <span className="mono-meta">Est. cost</span>
