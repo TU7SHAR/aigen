@@ -45,21 +45,37 @@ Create a product video ad.
 {
   "ok": true,
   "prompt": "Create an 8-second product advertisement video for ...",
-  "mock": true,
-  "provider": "mock",
-  "model": "mock",
+  "mock": false,
+  "provider": "gemini",
+  "model": "gemini-omni-1.1-flash",
   "mimeType": "video/mp4",
+  "usage": {
+    "total_input_tokens": 1200,
+    "total_output_tokens": 46336,
+    "total_tokens": 47536
+  },
   "video": "data:video/mp4;base64,AAAA...",
   "cost": {
-    "estimated": { "amountUsd": 0.8, "state": "estimated", "basis": "8s @ $0.1/s x1 (720p) — UNVERIFIED estimate" },
-    "reported": { "amountUsd": 0, "state": "estimated" },
-    "note": "Mock generation: no API call, no charge. ..."
+    "estimated": { "amountUsd": 0.8, "state": "estimated", "basis": "8s @ $0.1/s x1 (720p) — pre-call estimate" },
+    "reported": {
+      "amountUsd": 0.8125,
+      "state": "billed",
+      "basis": "From reported usage: input 1200 tok, output 46336 tok ...",
+      "tokens": { "input": 1200, "output": 46336, "total": 47536 }
+    },
+    "note": "Cost computed from the provider's reported token usage × published rates. ..."
   }
 }
 ```
 
-`mock: true` means the video is a placeholder and **no real generation
-occurred** — the UI surfaces this explicitly.
+- `usage` — the token meters the Gemini Interactions API actually returns
+  (`null` for the mock provider or when the API reports none).
+- `cost.estimated` — pre-call estimate; drives the UI preview + spend guard.
+- `cost.reported` — the **actual** cost, computed from `usage` × published
+  per-token rates. `state` is `"billed"` when usage was reported, `"unknown"`
+  when it wasn't, and `"estimated"` for the mock provider (`amountUsd: 0`).
+- `mock: true` means the video is a placeholder and **no real generation
+  occurred** — surfaced explicitly in the UI.
 
 ### Errors
 

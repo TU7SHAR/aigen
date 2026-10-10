@@ -7,7 +7,11 @@ import assert from "node:assert/strict";
 
 import { buildAdPrompt } from "../lib/prompts/adPrompt.js";
 import { generateRequestSchema } from "../lib/validation.js";
-import { estimateCost, checkSpendBudget } from "../lib/costs/estimate.js";
+import {
+  estimateCost,
+  checkSpendBudget,
+  costFromUsage,
+} from "../lib/costs/estimate.js";
 import { createMockProvider } from "../lib/ai/mockProvider.js";
 
 test("buildAdPrompt includes product + fidelity guardrail (image case)", () => {
@@ -71,6 +75,25 @@ test("checkSpendBudget blocks when over the cap", () => {
   const blocked = checkSpendBudget(10, 5);
   assert.equal(ok.ok, true);
   assert.equal(blocked.ok, false);
+});
+
+test("costFromUsage returns billed cost from reported tokens", () => {
+  // 8s of 720p video ≈ 5792 tok/s ≈ 46336 video output tokens.
+  const r = costFromUsage({
+    total_input_tokens: 1200,
+    total_output_tokens: 46336,
+    total_tokens: 47536,
+  });
+  assert.equal(r.state, "billed");
+  // input: 1200/1e6*1.5 = 0.0018 ; video: 46336/1e6*17.5 = 0.810...
+  assert.ok(r.amountUsd > 0.8 && r.amountUsd < 0.9);
+  assert.equal(r.tokens.total, 47536);
+});
+
+test("costFromUsage returns unknown when no usage reported", () => {
+  const r = costFromUsage(null);
+  assert.equal(r.state, "unknown");
+  assert.equal(r.amountUsd, null);
 });
 
 test("mock provider returns a flagged placeholder MP4, no cost", async () => {
