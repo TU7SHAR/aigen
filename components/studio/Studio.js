@@ -191,11 +191,18 @@ export default function Studio() {
     setForm((f) => ({ ...f, [k]: e?.target ? e.target.value : e }));
 
   const estCostLabel = useMemo(() => {
-    const rate = 0.1;
-    const mult = { "360p": 0.5, "720p": 1, "1080p": 1.6 }[form.resolution] ?? 1;
+    // Use the ACTIVE model's per-second rate from the server status probe
+    // (reads VIDEO_MODEL at request time) — not a hardcoded Omni rate. Falls
+    // back to 0.10 only until the probe resolves. Same resolution multipliers
+    // as the server's estimateCost().
+    const rate = status?.model?.usdPerSecond720p ?? 0.1;
+    const mult =
+      (status?.resolutionMultipliers || { "360p": 0.5, "720p": 1, "1080p": 1.6 })[
+        form.resolution
+      ] ?? 1;
     const usd = (rate * form.durationSeconds * mult).toFixed(2);
     return `~$${usd}`;
-  }, [form.resolution, form.durationSeconds]);
+  }, [status, form.resolution, form.durationSeconds]);
 
   async function generate() {
     if (inFlight.current) return;

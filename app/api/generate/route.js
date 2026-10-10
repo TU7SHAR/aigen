@@ -65,6 +65,7 @@ import {
   estimateCost,
   checkSpendBudget,
   recordSpendUsd,
+  RESOLUTION_MULTIPLIER,
 } from "@/lib/costs/estimate.js";
 
 // NOTE: This build enables `cacheComponents`, which disallows the `runtime`
@@ -292,6 +293,9 @@ export async function GET() {
       status: model.status,
       usdPerSecond720p: model.usdPerSecond720p,
     },
+    // Resolution multipliers so the UI estimate matches the server exactly
+    // (single source of truth; no duplicated numbers in the client).
+    resolutionMultipliers: RESOLUTION_MULTIPLIER,
     modelWarning: deprecationWarning(),
   });
 }
