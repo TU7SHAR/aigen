@@ -87,27 +87,60 @@ See `docs/ROADMAP.md` for sequencing.
   assets, so the gallery can't show broken thumbnails. *Live-verified*: a
   Wikipedia import kept 3 of 9 candidates, all with real `storedUrl` +
   dimensions.
-- **SVG support** (`verify.js` + `store.sanitizeSvg` + `sharp`): SVGs are
-  sanitized then **rasterized to PNG** so raster-only video models can use them;
-  the vector is kept too.
+- **SVG support + allowlist sanitizer** (`store.sanitizeSvg` + `verify.js` +
+  `sharp`): SVGs are sanitized then **rasterized to PNG** so raster-only video
+  models can use them; the vector is kept too. The sanitizer is now a **real XML
+  parse + strict allowlist** (cheerio), not the old regex stripper — it keeps
+  only presentational elements/attributes and drops `<script>`, event handlers,
+  `<foreignObject>`, external `href`/`use`/`image` refs, `url()`/`javascript:`
+  in styles, and DOCTYPE/entity/CDATA (XXE) constructs; unknown constructs fail
+  closed. Covered by `tests/svg-sanitize.test.mjs`.
 - **DesignProfile** (`lib/design/designProfile.js`): evidence-based palette
   (intentional colors from theme-color / CSS vars / CTA colors; white ignored),
   typography families, shape hints, with provenance + confidence. If no palette
   exists it reports `detected:false` and **does not invent one**. The importer
   returns `designProfile`; brand colors now prefer it.
-- **Relevance-based reference selection** (`lib/assets/selectReference.js`): an
-  icon/logo is **never** chosen as the primary scene reference; selection depends
-  on entity type (physical → product shot; SaaS → UI screenshot; brand → hero
-  visual). A logo-only site yields "no scene primary" (logo kept for an
-  end-card overlay).
+- **Role-based reference selection** (`lib/assets/selectReference.js`, **wired
+  into `lib/crawl/importProduct.js`**). HONEST SCOPE: this ranks assets by their
+  crawl-assigned **role** then resolution — it is **NOT** image-content
+  relevance analysis (nothing inspects pixels to confirm an image depicts the
+  product). Its strong guarantee is **negative**: an icon/logo/navigation asset
+  is **never** promoted to the primary scene reference. The importer calls
+  `selectReference(assets, { entityType })` and exposes `primaryReferenceRole` +
+  a `primaryReferenceSelection` provenance object (`selected`, `role`,
+  `basis: "role_rank_then_resolution"`, `reason`). When the selector
+  deliberately returns no scene-worthy reference (e.g. logo-only site),
+  `primaryImage` is **null** — it does **not** fall back to `heroAssets[0]`
+  (that would re-promote exactly what the selector rejected). A user-chosen
+  reference (Milestone 2) is authoritative (`basis: "user_selected"`).
+  "Verified" (decodable + sized) is distinct from "creatively suitable"; true
+  visual-relevance ranking is future work. *Live check*: a wikipedia.org import
+  selected `website_hero` as primary (not an icon).
+- **Reference resolution for generation** (`lib/assets/resolveReference.js`):
+  `resolveReferenceAsset(url)` was extracted out of the generate route into a
+  reusable module. It reads locally-stored assets from `/imported-assets/` via
+  `path.basename` (anti-traversal), fetches `http(s)` references through the
+  SSRF-safe fetcher, and returns `null` for SVG (raster models can't consume it
+  directly). `app/api/generate/route.js` imports this instead of inlining it.
+- **Pure image validation** (`lib/assets/verify.js` → `validateImageBuffer`):
+  the decode/dimension/size checks were extracted into a pure
+  `validateImageBuffer(raw, mime, opts)` that operates on an in-memory buffer,
+  so they can be unit-tested without a network fetch (`verifyImageUrl` is
+  SSRF-blocked against loopback, which is correct, but made buffer-level tests
+  impossible before).
 
-### Implemented but UNVERIFIED (needs a browser host)
+### Rendered capture — DISABLED by default, NOT production-safe
 - **Rendered screenshots + computed-style capture** (`lib/design/screenshot.js`):
-  a Playwright provider behind an interface, **opt-in** via
-  `ENABLE_RENDERED_CAPTURE=true`. Playwright is **not installed** in CI and the
-  app does **not** depend on it — when absent it returns `{available:false}` and
-  we fall back to HTML/CSS design extraction. The capture code is written against
-  the Playwright API but has not been exercised with a live browser here.
+  a Playwright provider behind an interface. The app **never depends on it** —
+  when disabled/absent it returns `{available:false}` and we fall back to
+  HTML/CSS design extraction. It is **doubly gated** (`ENABLE_RENDERED_CAPTURE`
+  **and** `ACKNOWLEDGE_CAPTURE_UNSAFE`) and must stay off for public/multi-tenant
+  use. In-process mitigations (per-subrequest DNS+IP blocklist, scheme
+  allowlist, request/byte/time budgets with the byte budget enforced on actual
+  received bytes) **raise the bar but are not a boundary**: DNS rebinding
+  (Chromium re-resolves after our check) and `--no-sandbox` mean the real fix is
+  network-level isolation outside the process. Full rationale in
+  `docs/SECURITY.md § Rendered capture`. Not relied upon for product quality.
 
 ### NOT yet implemented (honest)
 - Multi-image upload / per-asset role tagging / extra-context field inside the

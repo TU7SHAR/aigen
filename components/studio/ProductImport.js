@@ -19,6 +19,23 @@ const STAGES = [
   "Building profile…",
 ];
 
+// Roles a user can assign to a reference image. Technical/structural only — no
+// industry-specific creative mapping. Mirrors the crawler's asset roles plus
+// a user_upload role.
+const ASSET_ROLES = [
+  "hero_visual",
+  "hero_product",
+  "product_screenshot",
+  "app_screenshot",
+  "dashboard_screenshot",
+  "lifestyle",
+  "brand_art",
+  "illustration",
+  "logo",
+  "user_upload",
+  "image",
+];
+
 const ENTITY_LABELS = {
   ecommerce_product: "Product",
   ecommerce_store: "Online Store",
@@ -50,9 +67,15 @@ export default function ProductImport({ onImported }) {
   const [conceptsLoading, setConceptsLoading] = useState(false);
   const [edits, setEdits] = useState({});
   const [heroUrl, setHeroUrl] = useState(null);
-  const [removed, setRemoved] = useState(new Set());
   const [brandInfluence, setBrandInfluence] = useState("balanced");
   const [ignoreBrand, setIgnoreBrand] = useState(false);
+  // Product PR A: per-asset manager state (keyed by url). Each entry:
+  // { url, role, selected, isUpload, mimeType?, dataBase64? }
+  const [assets, setAssets] = useState([]);
+  // Product PR A: emphasis / avoid / extra context (free user input).
+  const [emphasis, setEmphasis] = useState([]); // string[]
+  const [avoid, setAvoid] = useState([]); // string[]
+  const [uploadError, setUploadError] = useState("");
 
   async function runImport(refresh = false) {
     setPhase("crawling");
@@ -86,9 +109,49 @@ export default function ProductImport({ onImported }) {
         price: p.price ?? "",
         currency: p.currency || "",
         offer: p.offer || "",
+        // Product PR A: user-correctable classification + offering + context.
+        entityType: json.entityType || "unknown",
+        category: p.category || "",
+        offering: p.offering || "",
+        userContext: "",
       });
-      setHeroUrl(p.primaryImage || p.productImages?.[0] || null);
-      setRemoved(new Set());
+
+      // Product PR A: build the per-asset manager from the full assets[] array
+      // the importer returns (roles + storedUrl). The relevance-selected
+      // primary (if any) is pre-selected; a logo/icon is never auto-primary.
+      const primaryUrl = p.primaryImage || null;
+      const importedAssets = (json.assets || [])
+        .filter((a) => a && (a.storedUrl || a.sourceUrl))
+        .map((a) => {
+          const url = a.storedUrl || a.sourceUrl;
+          const isScene = !["logo", "icon", "navigation_asset", "unrelated"].includes(a.role);
+          return {
+            url,
+            role: a.role || "image",
+            // Pre-select scene-worthy assets; the user can change freely.
+            selected: isScene,
+            primary: primaryUrl ? url === primaryUrl : false,
+            isUpload: false,
+            width: a.width,
+            height: a.height,
+          };
+        });
+      // Fallback: if the importer didn't return a structured assets[] array,
+      // derive from the flat productImages list (no roles).
+      if (importedAssets.length === 0 && Array.isArray(p.productImages)) {
+        for (const url of p.productImages) {
+          importedAssets.push({ url, role: "image", selected: true, primary: url === primaryUrl, isUpload: false });
+        }
+      }
+      if (!importedAssets.some((a) => a.primary) && importedAssets.some((a) => a.selected)) {
+        const first = importedAssets.find((a) => a.selected);
+        if (first) first.primary = true;
+      }
+      setAssets(importedAssets);
+      setEmphasis([]);
+      setAvoid([]);
+      setUploadError("");
+      setHeroUrl(primaryUrl || importedAssets.find((a) => a.primary)?.url || null);
 
       // Only generate concepts once we understand the entity well enough.
       // Below the threshold we ask the user to review first.
@@ -133,13 +196,17 @@ export default function ProductImport({ onImported }) {
             brand: e.brand || p.brand,
             description: e.description || p.description,
             offer: e.offer || p.offer,
-            entityType: json.entityType,
+            // Product PR A: user-corrected classification/offering flow into
+            // concept reasoning (the point of the review screen).
+            category: e.category || p.category,
+            offering: e.offering || p.offering,
+            entityType: e.entityType || json.entityType,
           },
           brand: json.brandProfile,
           design: json.designProfile,
           entity: json.entityProfile,
-          entityType: json.entityType,
-          objective: e.objective || undefined,
+          entityType: e.entityType || json.entityType,
+          objective: e.objective || e.userContext || undefined,
           hasUsableImage: Boolean(heroUrl || p.primaryImage || p.productImages?.length),
         }),
       });
@@ -160,43 +227,152 @@ export default function ProductImport({ onImported }) {
   // user knows to regenerate (gap: corrections must invalidate stale plans).
   function editField(key, value) {
     setEdits((prev) => ({ ...prev, [key]: value }));
-    if (["name", "brand", "description", "offer", "objective"].includes(key)) {
+    if (["name", "brand", "description", "offer", "objective", "entityType", "category", "offering", "userContext"].includes(key)) {
       setConceptsStale(true);
     }
   }
 
-  function toggleImage(u) {
-    setRemoved((prev) => {
-      const next = new Set(prev);
-      next.has(u) ? next.delete(u) : next.add(u);
+  // ---- Product PR A: asset-manager handlers ----
+  function updateAsset(url, patch) {
+    setAssets((prev) => prev.map((a) => (a.url === url ? { ...a, ...patch } : a)));
+  }
+  function toggleAssetSelected(url) {
+    setAssets((prev) =>
+      prev.map((a) => (a.url === url ? { ...a, selected: !a.selected } : a))
+    );
+  }
+  function setAssetPrimary(url) {
+    // Exactly one primary; selecting a primary also selects it.
+    setAssets((prev) => prev.map((a) => ({ ...a, primary: a.url === url, selected: a.url === url ? true : a.selected })));
+    setHeroUrl(url);
+  }
+  function setAssetRole(url, role) {
+    updateAsset(url, { role });
+  }
+  function removeAsset(url) {
+    setAssets((prev) => {
+      const next = prev.filter((a) => a.url !== url);
+      // If we removed the primary, promote the first remaining selected asset.
+      if (!next.some((a) => a.primary)) {
+        const cand = next.find((a) => a.selected) || next[0];
+        if (cand) cand.primary = true;
+        setHeroUrl(cand?.url || null);
+      }
       return next;
     });
+  }
+
+  const UPLOAD_MIME = ["image/png", "image/jpeg", "image/webp"];
+  const UPLOAD_MAX = 5 * 1024 * 1024;
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(",")[1] || "");
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+  async function onUploadFiles(fileList) {
+    setUploadError("");
+    const files = Array.from(fileList || []);
+    for (const file of files) {
+      if (!UPLOAD_MIME.includes(file.type)) {
+        setUploadError(`Unsupported file type: ${file.name} (PNG/JPEG/WebP only).`);
+        continue;
+      }
+      if (file.size > UPLOAD_MAX) {
+        setUploadError(`${file.name} exceeds the 5 MB limit.`);
+        continue;
+      }
+      const dataBase64 = await fileToBase64(file);
+      const url = `upload:${file.name}:${file.size}`; // stable local key (not fetched)
+      setAssets((prev) => {
+        if (prev.some((a) => a.url === url)) return prev;
+        const next = [
+          ...prev,
+          { url, role: "user_upload", selected: true, primary: false, isUpload: true, mimeType: file.type, dataBase64, name: file.name },
+        ];
+        // If nothing is primary yet, make this upload primary.
+        if (!next.some((a) => a.primary)) {
+          next[next.length - 1].primary = true;
+          setHeroUrl(url);
+        }
+        return next;
+      });
+    }
+  }
+
+  // ---- emphasis / avoid list editing (comma or newline separated) ----
+  function parseList(text) {
+    return Array.from(
+      new Set(
+        String(text || "")
+          .split(/[\n,]/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+      )
+    );
   }
 
   function continueToStudio() {
     const p = data.productProfile || {};
     const concept = concepts.find((c) => c.id === chosenConcept);
-    const gallery = (p.productImages || []).filter((u) => !removed.has(u));
+
+    // Product PR A: resolve the user's asset selections.
+    const selected = assets.filter((a) => a.selected);
+    const primary = selected.find((a) => a.primary) || selected[0] || null;
+    // Non-upload, URL-backed selected assets → referenceAssets (resolved
+    // server-side SSRF-safely). Uploads can't be fetched by URL, so the PRIMARY
+    // upload flows through the single base64 `image` path instead.
+    const urlRefs = selected
+      .filter((a) => !a.isUpload)
+      .map((a) => ({ url: a.url, role: a.role, primary: Boolean(a.primary) }));
+    const primaryUpload = primary?.isUpload ? primary : selected.find((a) => a.isUpload) || null;
+
+    const entityType = edits.entityType || data.entityType;
+
     onImported({
-      productProfile: { ...p, ...edits, entityType: data.entityType, primaryImage: heroUrl },
+      productProfile: {
+        ...p,
+        ...definedEdits(edits),
+        entityType,
+        category: edits.category || p.category,
+        offering: edits.offering || p.offering,
+        primaryImage: primary && !primary.isUpload ? primary.url : heroUrl,
+      },
       brandProfile: ignoreBrand ? null : data.brandProfile,
       brandInfluence,
-      entityType: data.entityType,
+      entityType,
+      // Pass the designProfile through (was schema-ready but never forwarded).
+      designProfile: data.designProfile || null,
+      entityConfidence: data.extractionConfidence ?? p.extractionConfidence ?? undefined,
       concept,
-      heroUrl,
-      gallery,
+      // The primary reference (hero). If it's an upload, send base64; else URL.
+      heroUrl: primary && !primary.isUpload ? primary.url : null,
+      uploadImage: primaryUpload ? { data: primaryUpload.dataBase64, mimeType: primaryUpload.mimeType } : null,
+      // All user-selected URL references (multi-image).
+      referenceAssets: urlRefs,
+      // Free user controls.
+      userContext: (edits.userContext || "").trim() || undefined,
+      emphasis,
+      avoid,
       form: {
         productName: edits.name,
         brand: edits.brand,
         description: edits.description,
         offer: edits.offer,
-        // AI concepts carry no `template` — their visual direction drives the
-        // scene plan directly (see planner). `template` only seeds neutral
-        // base lighting/camera; leave it undefined for AI concepts rather than
-        // forcing a generic "minimal" creative. Legacy concepts may set one.
         template: concept?.template,
       },
     });
+  }
+
+  // Only non-empty edits (so a cleared field doesn't wipe a scraped value).
+  function definedEdits(e) {
+    const out = {};
+    for (const k of ["name", "brand", "description", "price", "currency", "offer"]) {
+      if (e[k] !== undefined && e[k] !== "") out[k] = e[k];
+    }
+    return out;
   }
 
   // ---- render ----
@@ -265,7 +441,13 @@ export default function ProductImport({ onImported }) {
   const brand = data.brandProfile;
   const warnings = data.extractionWarnings || [];
   const obs = data.observability || {};
-  const gallery = p.productImages || [];
+  // Product PR A: the primary preview comes from the asset manager.
+  const primaryAsset = assets.find((a) => a.primary && a.selected) || assets.find((a) => a.primary) || null;
+  const primaryPreviewUrl = primaryAsset
+    ? primaryAsset.isUpload
+      ? `data:${primaryAsset.mimeType};base64,${primaryAsset.dataBase64}`
+      : primaryAsset.url
+    : null;
 
   const conf = data.extractionConfidence ?? p.extractionConfidence ?? 0;
   const lowConf = conf < 0.45;
@@ -316,7 +498,23 @@ export default function ProductImport({ onImported }) {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* editable fields */}
         <div className="space-y-3">
-          <Field label="Product name">
+          {/* Product PR A: user-correctable classification */}
+          <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
+            <Field label="What is this? (type)">
+              <select className="input" value={edits.entityType || "unknown"} onChange={(e) => editField("entityType", e.target.value)}>
+                {Object.entries(ENTITY_LABELS).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Category / industry">
+              <input className="input" value={edits.category || ""} onChange={(e) => editField("category", e.target.value)} placeholder="e.g. project management SaaS" />
+            </Field>
+          </div>
+          <Field label="Offering (what it provides)">
+            <input className="input" value={edits.offering || ""} onChange={(e) => editField("offering", e.target.value)} placeholder="e.g. team task tracking with automations" />
+          </Field>
+          <Field label="Product / service name">
             <input className="input" value={edits.name} onChange={(e) => editField("name", e.target.value)} />
           </Field>
           <Field label="Brand">
@@ -338,40 +536,116 @@ export default function ProductImport({ onImported }) {
           </Field>
         </div>
 
-        {/* hero + gallery */}
+        {/* Product PR A: asset manager (select / role / primary / remove / upload) */}
         <div className="space-y-3">
-          <span className="block text-sm font-medium">Hero image</span>
-          <div className="aspect-square overflow-hidden rounded-brand border border-line bg-surface">
-            {heroUrl ? (
+          <span className="block text-sm font-medium">Reference images</span>
+          <p className="text-xs text-muted">
+            Pick which images influence the video, set each one&apos;s purpose, and
+            choose the primary reference. Add your own screenshots, logos or
+            product photos. Unselected images are ignored.
+          </p>
+          <div className="aspect-video overflow-hidden rounded-brand border border-line bg-surface">
+            {primaryPreviewUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={heroUrl} alt="Selected hero product image" loading="lazy" className="h-full w-full object-contain" />
+              <img src={primaryPreviewUrl} alt="Primary reference" loading="lazy" className="h-full w-full object-contain" />
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted">No image</div>
+              <div className="flex h-full items-center justify-center text-sm text-muted">No primary reference selected</div>
             )}
           </div>
-          <span className="block text-sm font-medium">Gallery (click to choose hero / remove)</span>
-          <div className="grid grid-cols-3 gap-2 min-[400px]:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4">
-            {gallery.map((u) => (
-              <div key={u} className="group relative">
+
+          <div className="grid grid-cols-2 gap-2 min-[500px]:grid-cols-3">
+            {assets.map((a) => (
+              <div
+                key={a.url}
+                className={`group relative rounded-lg border p-1.5 ${
+                  a.primary ? "border-accent ring-2 ring-[color:var(--accent)]" : a.selected ? "border-ink" : "border-line opacity-60"
+                }`}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={u}
-                  alt="Product image candidate"
+                  src={a.isUpload ? `data:${a.mimeType};base64,${a.dataBase64}` : a.url}
+                  alt={a.role}
                   loading="lazy"
-                  onClick={() => setHeroUrl(u)}
-                  className={`aspect-square w-full cursor-pointer rounded-lg border bg-surface object-contain p-1 ${
-                    heroUrl === u ? "border-accent ring-2 ring-[color:var(--accent)]" : "border-line"
-                  } ${removed.has(u) ? "opacity-30" : ""}`}
+                  onClick={() => toggleAssetSelected(a.url)}
+                  className="aspect-square w-full cursor-pointer rounded bg-surface object-contain"
                 />
                 <button
-                  onClick={() => toggleImage(u)}
+                  onClick={() => removeAsset(a.url)}
                   className="absolute right-1 top-1 rounded bg-black/60 px-1 text-xs text-white opacity-0 transition group-hover:opacity-100"
+                  aria-label="Remove image"
                 >
-                  {removed.has(u) ? "undo" : "✕"}
+                  ✕
                 </button>
+                <select
+                  className="input mt-1 !min-h-0 !py-1 text-xs"
+                  value={a.role}
+                  onChange={(e) => setAssetRole(a.url, e.target.value)}
+                >
+                  {ASSET_ROLES.map((r) => (
+                    <option key={r} value={r}>{r.replace(/_/g, " ")}</option>
+                  ))}
+                </select>
+                <div className="mt-1 flex items-center justify-between gap-1 text-[11px]">
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={a.selected} onChange={() => toggleAssetSelected(a.url)} />
+                    use
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAssetPrimary(a.url)}
+                    className={a.primary ? "font-medium text-accent" : "text-muted hover:underline"}
+                  >
+                    {a.primary ? "★ primary" : "set primary"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
+
+          <label className="btn btn-ghost w-full cursor-pointer text-sm">
+            + Upload image(s)
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              className="hidden"
+              onChange={(e) => onUploadFiles(e.target.files)}
+            />
+          </label>
+          {uploadError && (
+            <p className="text-xs text-danger" role="alert">{uploadError}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Product PR A: emphasis / avoid / extra context */}
+      <div className="card space-y-3 p-4">
+        <div className="eyebrow">Direct the ad (optional)</div>
+        <Field label="Extra context about your product/service or the video you want">
+          <textarea
+            className="input min-h-20"
+            value={edits.userContext || ""}
+            onChange={(e) => editField("userContext", e.target.value)}
+            placeholder="Anything the page didn't say — audience, tone, the angle you want, what makes you different…"
+          />
+        </Field>
+        <div className="grid gap-3 min-[500px]:grid-cols-2">
+          <Field label="Emphasize (features / benefits / messages)">
+            <textarea
+              className="input min-h-16"
+              defaultValue={emphasis.join("\n")}
+              onChange={(e) => setEmphasis(parseList(e.target.value))}
+              placeholder="One per line, e.g.&#10;real-time sync&#10;works offline"
+            />
+          </Field>
+          <Field label="Must NOT appear">
+            <textarea
+              className="input min-h-16"
+              defaultValue={avoid.join("\n")}
+              onChange={(e) => setAvoid(parseList(e.target.value))}
+              placeholder="One per line, e.g.&#10;no people&#10;no competitor logos"
+            />
+          </Field>
         </div>
       </div>
 

@@ -1,5 +1,189 @@
 # Agent activity log
 
+## 2026-10-11 — Product PR A: multi-image upload, editable product intelligence, user context, asset selection, state propagation
+
+- **Asked:** (priority pivot to product quality) make the app understand +
+  let users CORRECT what the imported site promotes: edit entity/industry/
+  category/offering, add written context, upload multiple images, remove
+  irrelevant scraped assets, select which images influence generation + their
+  purpose, say which features/benefits/messages to emphasize and what must NOT
+  appear — all corrections propagating to creative planning AND the real
+  generation request. No industry-specific hardcoding. No paid calls.
+- **Did (backend contract first, then UI, both tested):**
+  - **Schema (`lib/validation.js`):** added `category`, `offering`,
+    `emphasis[]`, `avoid[]`, and `referenceAssets[]` ({url, role, primary}).
+    `userIntent` (already present, previously unused) now carries free context.
+  - **Compile (`lib/creative/compile.js`):** user `category`/`offering`
+    override scraped values; `emphasis`/`avoid` normalized (trim+dedupe) and
+    threaded into the planner and prompt composer.
+  - **Prompt (`lib/creative/promptComposer.js`):** emphasis → an affirmative
+    "EMPHASIZE …" instruction; avoid → appended to the negative/`Avoid:` rules
+    (deduped). **Planner** carries emphasis/avoid onto the brief;
+    **generationContext** now includes category/offering + emphasis/avoid so
+    the grounding (and PR B's AI director) see the corrections.
+  - **Multi-reference (`lib/api/generateCore.js`):** resolves the PRIMARY of
+    `referenceAssets[]` (flagged or first) into the hero `image`; records the
+    full selection on `sourceImageMeta.selectedReferences`. Single-URL
+    `referenceAssetUrl` kept for back-compat.
+  - **Review UI (`components/studio/ProductImport.js`):** editable type/
+    category/offering; a real **asset manager** built from the importer's
+    `assets[]` (select / assign role / set primary / remove) with
+    **multi-file upload** (PNG/JPEG/WebP ≤5MB, client base64); emphasis / avoid
+    / extra-context inputs. Corrections flow into concept reasoning and the
+    handoff payload (incl. `designProfile`, previously never forwarded).
+  - **Studio (`components/studio/Studio.js`):** threads every new field into
+    BOTH the `/api/creative/preview` payload and the `/api/generate` payload,
+    so the previewed prompt == the generated prompt. A primary UPLOADED
+    reference flows via the single base64 `image` path; URL references via
+    `referenceAssets[]`.
+- **Files affected:** `lib/validation.js`, `lib/creative/compile.js`,
+  `lib/creative/promptComposer.js`, `lib/creative/planner.js`,
+  `lib/creative/generationContext.js`, `lib/api/generateCore.js`,
+  `components/studio/ProductImport.js`, `components/studio/Studio.js`,
+  `tests/product-controls.test.mjs` (new), `docs/agent-activity-log.md`.
+- **Verification:** `npm run lint` clean · `npm test` **127/127** (7 new in
+  `product-controls`: category override, emphasis-in-prompt, avoid-in-negatives,
+  brief carry, normalization, multi-ref primary honored, first-selected
+  fallback) · `npm run build` OK. **Live HTTP check** against
+  `/api/creative/preview`: corrected `entityType=saas`, EMPHASIZE line present,
+  user avoids in negative rules, corrected category in context, brief carries
+  emphasis/avoid, preflight ready. No paid video calls.
+- **Scope note:** no industry→creative hardcoding added — emphasis/avoid/
+  context are free user inputs used verbatim; roles are technical/structural.
+- **Branch/PR:** `feat/product-controls` (stacked on `fix/pr18-corrections`).
+
+## 2026-10-11 — PR #18 corrections (round 2): honest labeling, allowlist SVG sanitizer, no-fallback reference, real server-pipeline integration test, capture gated unsafe
+
+- **Asked:** reviewer follow-up on PR #19/#20 — (1) don't claim the browser
+  capture is production-safe (DNS rebinding + `--no-sandbox`; Content-Length
+  budget isn't real enforcement); keep public capture disabled; (2) stop
+  claiming `selectReference` does content-relevance, and remove the
+  `heroAssets[0]` fallback when the selector deliberately returns nothing;
+  distinguish verified from creatively-suitable; keep a user pick authoritative;
+  (3) replace the regex SVG sanitizer with a robust allowlist approach + tests;
+  (4) add a real application/server-level integration test (not just a lib E2E);
+  (5) stop backdating docs to Oct 9 — today is Oct 11; (6) land the corrected
+  security code safely in the stacked chain; (7) clearly separate real browser
+  execution, mocked generation, visual relevance, and security validation.
+- **Interpreted + did:**
+  - **Honest labeling (screenshot.js):** added a prominent security banner;
+    the capability is now **doubly gated** (`ENABLE_RENDERED_CAPTURE` **and**
+    `ACKNOWLEDGE_CAPTURE_UNSAFE`) and documents that in-process checks are
+    bar-raising, not a boundary (DNS rebinding TOCTOU + `--no-sandbox`). The
+    download budget is now enforced on **actual received bytes**, not just
+    `Content-Length`. Correct posture (network-level isolation) documented in
+    `docs/SECURITY.md § Rendered capture`. SSRF protections kept intact.
+  - **Reference selection (importProduct.js + selectReference.js):** removed the
+    `heroAssets[0]` fallback — when the selector returns no scene-worthy
+    reference, `primaryImage` is **null** (honest, propagated), not a
+    re-promoted hero. Added a `primaryReferenceSelection` provenance object
+    (`basis: "role_rank_then_resolution"`, not relevance). Documented the module
+    as **role-based, NOT content-relevance**, dropped the misleading
+    `relevanceScore` hint, and made a `userSelectedReference` authoritative
+    (`basis: "user_selected"`) for Milestone 2.
+  - **SVG sanitizer (store.js):** replaced the regex stripper with a real XML
+    parse + strict allowlist (cheerio) — keeps only presentational
+    elements/attributes; drops scripts, event handlers, `<foreignObject>`,
+    external `href`/`use`/`image` refs, `url()`/`javascript:` styles, and
+    DOCTYPE/entity/CDATA (XXE); unknown constructs fail closed. Rasterization
+    with sharp is the defense-in-depth second layer.
+  - **Tests:** added `tests/svg-sanitize.test.mjs` (10 malicious/benign cases)
+    and `tests/generate-route-integration.test.mjs` (server-pipeline: import →
+    selectReference → review handoff → `runGenerate` → recorded mock-provider
+    input; asserts logo-only → no primary, and user pick authoritative). To make
+    the real pipeline testable without Next's `next/server` resolution, extracted
+    the generate pipeline into `lib/api/generateCore.js` (`runGenerate`) and made
+    `app/api/generate/route.js` a thin NextResponse wrapper (behavior identical).
+  - **Docs:** corrected `VISUAL_INTELLIGENCE.md` (role-based selection,
+    no-fallback, capture disabled/unsafe), `SECURITY.md`, `TESTING.md` (scope &
+    honesty note; distinguishes code-correctness from ad quality), and set all
+    touched docs to **2026-10-11** (not Oct 9).
+- **Files affected:** `lib/design/screenshot.js`, `lib/crawl/importProduct.js`,
+  `lib/assets/selectReference.js`, `lib/assets/store.js`,
+  `lib/api/generateCore.js` (new), `app/api/generate/route.js`,
+  `tests/svg-sanitize.test.mjs` (new),
+  `tests/generate-route-integration.test.mjs` (new), `docs/VISUAL_INTELLIGENCE.md`,
+  `docs/SECURITY.md`, `docs/TESTING.md`, `docs/agent-activity-log.md`.
+- **Verification:** `npm run lint` clean, `npm test` **120/120 pass**,
+  `npm run build` OK. SVG sanitizer manually fuzzed against script/onload/
+  external-ref/foreignObject/style-url/DOCTYPE-XXE/CDATA — all neutralized;
+  legitimate SVG still rasterizes. No paid video calls.
+- **Scope note (per new steering):** stopped here on security/infra. Did NOT
+  expand capture hardening further; product work (Product PR A onward) is next.
+- **Branch/PR:** `fix/pr18-corrections` → PR #20 (stacked on #19).
+
+## 2026-10-11 — PR #18 corrections: browser SSRF hardening, selectReference wiring, real tests + E2E proof, avatar-report license fix
+
+- **Asked:** "complete PR #18 — browser-capture security hardening, wire
+  `selectReference` into the importer, add real verification tests + an
+  end-to-end mock-provider proof, and correct the avatar report (Piper is not
+  plainly MIT — OHF Piper is GPL-3.0; audit MuseTalk's dependency licenses;
+  distinguish benchmarks from measurements; don't call MuseTalk+Piper
+  production-ready without a benchmarked PoC)."
+- **Interpreted:** PR #18 landed the visual-intelligence building blocks but left
+  gaps: (1) `selectReference` existed but nothing called it, so the importer
+  could still pick an icon as the primary scene reference; (2) the rendered-
+  screenshot capture had no per-subresource SSRF guard or resource limits;
+  (3) the only "tests" exercised code paths that are SSRF-blocked against
+  loopback, so there was no real buffer-level verification test and no proof a
+  selected reference actually reaches the generation provider; (4) the avatar
+  feasibility report overstated license cleanliness ("Piper = MIT",
+  "MuseTalk = MIT") and blurred public benchmarks with measured results.
+- **Did:**
+  - **Wired `selectReference` into `lib/crawl/importProduct.js`**: the importer
+    now calls `selectReference(assets, { entityType })`, exposes
+    `primaryReferenceRole`, and resolves `primaryImage` from the chosen
+    reference (`storedUrl` → `sourceUrl` → hero fallback) instead of the first
+    hero asset. Added `illustration` and `website_hero` to `webRoles`.
+  - **Hardened `lib/design/screenshot.js`**: per-subrequest SSRF guard
+    (`isSubrequestAllowed` = DNS-resolve + `isBlockedIp` on every resource the
+    page loads), plus hard limits (`maxRequests:150`, `maxTotalBytes:25MB`,
+    `maxCaptureMs:30000`), `waitUntil:"domcontentloaded"` + 1200ms settle,
+    `acceptDownloads:false`, and a capture-deadline timeout. Imports `dns`,
+    `net`, `isBlockedIp`.
+  - **Extracted pure `validateImageBuffer(raw, mime, opts)`** from
+    `verifyImageUrl` in `lib/assets/verify.js` so decode/size/dimension checks
+    are unit-testable without a (SSRF-blocked) network fetch.
+  - **Extracted `lib/assets/resolveReference.js`** (`resolveReferenceAsset`)
+    from the generate route — local `/imported-assets/` read via
+    `path.basename` anti-traversal, SSRF-safe fetch for `http(s)`, `null` for
+    SVG; `app/api/generate/route.js` now imports it and dropped the inlined
+    copy + unused `fs`/`path`/`safeFetch` imports.
+  - **Mock provider now echoes `receivedRequest`** (`lib/ai/mockProvider.js`:
+    hasImage, imageMimeType, imageBytesApprox, promptPreview, aspectRatio,
+    durationSeconds) and the generate route surfaces it, giving an auditable
+    proof that the resolved reference image reached the provider.
+  - **Added real tests**: `tests/verify-live.test.mjs` (8, buffer-level via
+    `validateImageBuffer`) and `tests/generate-reference-e2e.test.mjs` (5,
+    lib-level E2E proving a selected reference reaches the mock provider).
+  - **Corrected `docs/AVATAR_FEASIBILITY.md`**: Piper is forked — archived
+    `rhasspy/piper` (MIT) vs maintained `OHF-Voice/piper1-gpl` (**GPL-3.0**,
+    because it embeds GPL espeak-ng) vs `piper-plus` (MIT, no espeak-ng);
+    added a MuseTalk dependency-license audit (code MIT, but it auto-downloads
+    sd-vae-ft-mse / whisper-tiny / DWPose / face-parsing weights, each with its
+    own license — mostly MIT/Apache per MuseTalk's LICENSE, but must be checked
+    per pinned weight); relabelled all FPS/VRAM/$ figures as public benchmarks
+    or estimates (not measured on our hardware); and stated MuseTalk+TTS is NOT
+    production-ready until a benchmarked presenter-video PoC exists.
+- **Files affected:** `lib/crawl/importProduct.js`, `lib/design/screenshot.js`,
+  `lib/assets/verify.js`, `lib/assets/resolveReference.js` (new),
+  `app/api/generate/route.js`, `lib/ai/mockProvider.js`,
+  `tests/verify-live.test.mjs` (new), `tests/generate-reference-e2e.test.mjs`
+  (new), `docs/AVATAR_FEASIBILITY.md`, `docs/VISUAL_INTELLIGENCE.md`,
+  `docs/agent-activity-log.md`.
+- **Impact:** The importer can no longer promote an icon/logo to the primary
+  scene reference; the opt-in browser capture is SSRF-hardened and resource-
+  bounded; verification and reference→provider wiring are now covered by real
+  tests (105/105 pass); and the avatar report is honest about licensing and
+  about the benchmark-vs-measured distinction. No paid video calls were made.
+- **Verification:** `npm run lint` clean, `npm test` 105/105 pass,
+  `npm run build` OK. Live proof: wikipedia.org import → entity `business`,
+  `primaryReferenceRole: website_hero` (not an icon), 4 assets kept / 0
+  rejected; generate (mock) with that reference →
+  `receivedRequest.hasImage: true`, `mime: image/png`, `bytes: 189402`.
+- **Branch/PR:** `fix/pr18-corrections`, stacked on
+  `feat/enable-rendered-screenshots` (PR #19).
+
 ## 2026-10-11 — MakeAdClips brand identity: favicon, logo mark, icons & metadata
 
 - **Asked:** "add favicon and all related to brand identity … the brand is not

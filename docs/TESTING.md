@@ -1,6 +1,15 @@
 # Testing — MakeAdClips Studio
 
-_Last updated: 2026-10-09_
+_Last updated: 2026-10-11_
+
+## Scope & honesty note
+
+Passing unit/integration tests prove the **code paths** behave as specified with
+the **mock** provider. They do **not** prove advertisement **quality** (product
+relevance, visual fidelity, script quality, format match) — that requires
+inspecting real generated outputs and is explicitly out of scope for `npm test`.
+"Verified" asset = decodable + correctly sized, **not** creatively suitable.
+No test here makes a paid video call.
 
 ## Automated tests
 
@@ -52,7 +61,26 @@ no Firecrawl, no Gemini, no cost**:
 - Prompt with no brand → explicitly avoids generic "AI silver".
 - Concepts: luxury vs. playful brands get different concept sets.
 
-**Last run (2026-10-09): 26/26 passing** (10 prior + 16 new).
+## Visual-intelligence & reference-pipeline tests (PR #18 corrections)
+
+- `tests/verify-live.test.mjs` — buffer-level image validation via the pure
+  `validateImageBuffer` (real decode, dimensions, min-size, SVG-raster,
+  corrupt-buffer rejection).
+- `tests/svg-sanitize.test.mjs` — the allowlist SVG sanitizer removes
+  `<script>`, event handlers, `<foreignObject>`, external `href`/`use`/`image`
+  refs, `url()`/`javascript:` styles, and DOCTYPE/entity (XXE) constructs;
+  legitimate SVG survives and still rasterizes.
+- `tests/generate-reference-e2e.test.mjs` — lib-level E2E: a stored asset is
+  resolved by the same `resolveReferenceAsset` the route uses and reaches the
+  mock provider (`receivedRequest.hasImage`).
+- `tests/generate-route-integration.test.mjs` — **server-pipeline** integration:
+  import-result → `selectReference` → review-handoff payload → `runGenerate`
+  (the real pipeline the Next POST handler wraps) → recorded mock-provider
+  input. Also asserts a logo-only set yields **no** primary (no `heroAssets[0]`
+  fallback) and that a user-selected reference is authoritative. NOT a
+  browser/HTTP/UI test.
+
+**Full suite last run (2026-10-11): 120/120 passing.**
 
 Live smoke test (mock provider): importer pipeline on a fixture extracted
 name/brand/price, ranked the hero image, found brand colors + logo, stripped

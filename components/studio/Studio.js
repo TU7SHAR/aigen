@@ -78,14 +78,32 @@ export default function Studio() {
       brandProfile: payload.brandProfile,
       brandInfluence: payload.brandInfluence,
       entityType: payload.entityType,
+      designProfile: payload.designProfile || null,
+      entityConfidence: payload.entityConfidence,
       concept: payload.concept,
       // The chosen hero image becomes the server-resolved generation reference
       // (fixes the bug where a crawler-found image never reached the model).
       referenceAssetUrl: payload.heroUrl || null,
+      // Product PR A: all user-selected URL references (multi-image), plus the
+      // user's emphasis/avoid/context corrections.
+      referenceAssets: payload.referenceAssets || [],
+      emphasis: payload.emphasis || [],
+      avoid: payload.avoid || [],
+      userContext: payload.userContext || undefined,
     });
     setImportedImages(
-      [payload.heroUrl, ...(payload.gallery || [])].filter(Boolean)
+      [payload.heroUrl, ...(payload.referenceAssets || []).map((a) => a.url)].filter(Boolean)
     );
+    // Product PR A: if the user's primary reference is an UPLOAD, seed it as the
+    // single base64 generation image (uploads can't be fetched by URL).
+    if (payload.uploadImage?.data) {
+      setImage({
+        previewUrl: `data:${payload.uploadImage.mimeType};base64,${payload.uploadImage.data}`,
+        base64: payload.uploadImage.data,
+        mimeType: payload.uploadImage.mimeType,
+        name: "uploaded-reference",
+      });
+    }
     setForm((f) => ({
       ...f,
       productName: payload.form.productName || f.productName,
@@ -132,7 +150,17 @@ export default function Studio() {
             brandProfile: imported?.brandProfile || undefined,
             brandInfluence: imported?.brandInfluence || "balanced",
             entityType: imported?.entityType || undefined,
+            designProfile: imported?.designProfile || undefined,
+            entityConfidence: imported?.entityConfidence,
             concept: imported?.concept || undefined,
+            // Product PR A: user corrections must be reflected in the PREVIEW
+            // so the prompt the user reviews == the prompt the model receives.
+            category: imported?.productProfile?.category || undefined,
+            offering: imported?.productProfile?.offering || undefined,
+            userIntent: imported?.userContext || undefined,
+            emphasis: imported?.emphasis?.length ? imported.emphasis : undefined,
+            avoid: imported?.avoid?.length ? imported.avoid : undefined,
+            referenceAssets: imported?.referenceAssets?.length ? imported.referenceAssets : undefined,
             sourceImageMeta: image ? { hintText: image.name, url: image.name } : undefined,
           }),
         });
@@ -226,11 +254,24 @@ export default function Studio() {
       brandProfile: imported?.brandProfile || undefined,
       brandInfluence: imported?.brandInfluence || "balanced",
       entityType: imported?.entityType || undefined,
+      designProfile: imported?.designProfile || undefined,
+      entityConfidence: imported?.entityConfidence,
       concept: imported?.concept || undefined,
-      // Use the chosen imported image as the generation reference when the user
-      // hasn't manually uploaded one — resolved server-side.
+      // Product PR A: user corrections propagate into the real generation.
+      category: imported?.productProfile?.category || undefined,
+      offering: imported?.productProfile?.offering || undefined,
+      userIntent: imported?.userContext || undefined,
+      emphasis: imported?.emphasis?.length ? imported.emphasis : undefined,
+      avoid: imported?.avoid?.length ? imported.avoid : undefined,
+      // Multi-image: all user-selected URL references (resolved server-side).
+      // The primary flows to the hero image; the rest are recorded context.
+      referenceAssets:
+        !image && imported?.referenceAssets?.length ? imported.referenceAssets : undefined,
+      // Back-compat single reference when no multi-selection is present.
       referenceAssetUrl:
-        !image && imported?.referenceAssetUrl ? imported.referenceAssetUrl : undefined,
+        !image && !imported?.referenceAssets?.length && imported?.referenceAssetUrl
+          ? imported.referenceAssetUrl
+          : undefined,
       // Hint the source-image classifier (e.g. imported poster/ad vs packshot).
       sourceImageMeta: image
         ? { hintText: image.name, url: image.name }
