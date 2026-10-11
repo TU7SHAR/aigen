@@ -1,5 +1,40 @@
 # Agent activity log
 
+## 2026-10-11 — Fix: Veo generation 502 (video download) + deprecation + opaque errors
+
+- **Asked:** real run of a Veo (`veo-3.1-lite`) generation returned
+  `POST /api/generate 502 in 67s` after a long wait, with the SDK warning
+  "generateVideos with prompt/image/video arguments is deprecated… use source".
+- **Root cause:** in `@google/genai` v2.28.0 `ai.files.download()` returns
+  `void` (it writes to `downloadPath` / mutates the `Video` in place). The old
+  `extractVeoVideo` read a non-existent return value, so even a SUCCESSFUL
+  generation fell through to `null` → a false 502 "no downloadable video". The
+  real failure reason was also swallowed by a bare `catch {}` and a generic
+  `operation.error` message, so the UI only ever saw "502".
+- **Did (`lib/ai/veoProvider.js`):**
+  - Download the completed video to a temp file (`os.tmpdir()`), read the bytes
+    back as base64, and clean up; also honor inline `videoBytes` and in-place
+    population. No silent catch — download/filter/no-bytes failures now throw a
+    descriptive `ProviderError` (surfaced to the client via `PROVIDER_ERROR`).
+  - Switched the request to the non-deprecated `source: { prompt, image }` arg
+    (removes the deprecation warning / future breakage).
+  - Surface `operation.error.code`/message and `raiMediaFilteredReasons` so a
+    filtered or rejected generation reports WHY, not a bare 502.
+  - Exported `extractVeoVideo` for unit testing.
+- **Note on model id:** `veo-3.1-lite` maps to the PREVIEW id
+  `veo-3.1-fast-generate-preview` (shutdown 2026-10-22). If generation still
+  fails after this fix, the next most likely cause is that preview id being
+  retired — `mapVeoError` now returns a clear 400 telling the user to set
+  `VEO_API_MODEL_ID` to the current id from AI Studio.
+- **Files affected:** `lib/ai/veoProvider.js`, `tests/veo-provider.test.mjs`
+  (new, 7), `docs/agent-activity-log.md`.
+- **Verification:** `npm run lint` clean · `npm test` **134/134** ·
+  `npm run build` OK. New tests exercise inline bytes, temp-file download,
+  in-place mutation, RAI filtering, download failure, empty-file rejection, and
+  temp cleanup — all with a FAKE SDK (no network, no key, **no paid call**).
+  The live 502 itself cannot be re-run here without a paid call + your key.
+- **Branch/PR:** `fix/veo-video-download`.
+
 ## 2026-10-11 — Product PR A: multi-image upload, editable product intelligence, user context, asset selection, state propagation
 
 - **Asked:** (priority pivot to product quality) make the app understand +
