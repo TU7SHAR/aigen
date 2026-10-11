@@ -61,11 +61,32 @@ test("RAI-filtered result throws a descriptive error (not a bare 502)", async ()
   );
 });
 
-test("download failure surfaces the real message", async () => {
+test("SDK download failure → falls back to direct URI fetch and succeeds", async (t) => {
   const ai = { files: { download: async () => { throw new Error("network boom"); } } };
+  // Stub global fetch for the fallback path.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    const b = Buffer.from("fallback-bytes");
+    const ab = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+    return { ok: true, arrayBuffer: async () => ab, text: async () => "" };
+  };
+  t.after(() => { globalThis.fetch = realFetch; });
+  const out = await extractVeoVideo(
+    ai,
+    op({ uri: "https://generativelanguage.googleapis.com/v1beta/files/abc:download" }),
+    "test-key"
+  );
+  assert.equal(Buffer.from(out.data, "base64").toString(), "fallback-bytes");
+});
+
+test("both SDK download AND URI fetch fail → descriptive 502 (not bare)", async (t) => {
+  const ai = { files: { download: async () => { throw new Error("sdk down"); } } };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, status: 403, statusText: "Forbidden", text: async () => "no access" });
+  t.after(() => { globalThis.fetch = realFetch; });
   await assert.rejects(
-    () => extractVeoVideo(ai, op({ uri: "https://files/z" })),
-    (e) => e instanceof ProviderError && /download failed/i.test(e.message) && /network boom/.test(e.message)
+    () => extractVeoVideo(ai, op({ uri: "files/xyz" }), "test-key"),
+    (e) => e instanceof ProviderError && e.status === 502 && /403|Forbidden|no access|SUCCEEDED/.test(e.message)
   );
 });
 
