@@ -743,3 +743,46 @@
   the OS as "not officially supported" and used a fallback build; works here but
   production hosting should use a supported base image or a browser service.
 - **Branch/PR:** `feat/enable-rendered-screenshots` → `main`.
+
+## 2026-10-11 — Self-hosted video on Modal (GPU) with monthly budget + auto-switch to Gemini
+
+- **Asked:** we have Modal.com approved with $30/mo GPU credit. Use it to
+  generate video instead of burning Gemini credits; track spend and switch to
+  Gemini once $30 is spent. Modal bills GPU per second, so keep GPU time low.
+  What do I need to set up on my end?
+- **Did:**
+  - **Persistent monthly spend ledger** (`lib/costs/modalLedger.js`): file-backed
+    (`.modal-spend.json`, gitignored), survives restarts, auto-resets per UTC
+    month (matches the $30/mo credit). `recordModalSpend`, `getModalSpend`,
+    `checkModalBudget`, `getModalBudgetUsd`. Path resolved per-call so env
+    overrides/tests always apply.
+  - **Modal provider adapter** (`lib/ai/modalProvider.js`): POSTs to the deployed
+    Modal HTTPS endpoint (secret-gated), gets back `{videoBase64, gpuSeconds}`,
+    estimates USD = gpuSeconds × `MODAL_GPU_USD_PER_SECOND`, records it. Hard
+    request timeout. Footage only — compositor still renders exact copy.
+  - **Auto-switch router** (`lib/ai/index.js`, now async): the `modal` route
+    checks the monthly budget BEFORE calling the GPU and transparently falls
+    back to the Gemini (Veo/Omni) path when Modal is unconfigured or the cap is
+    reached — so neither credit pool is burned unexpectedly. `generateCore` now
+    `await`s the provider and passes the prospective estimate; records Modal
+    spend in the dev ledger too.
+  - **Registry + config**: added `modal-video` model (providerImpl `modal`);
+    config getters for endpoint/secret/GPU-rate/`isModalConfigured`.
+  - **Modal worker** (`modal/video_worker.py` + `modal/README.md`): LTX-Video on
+    an L4, built to MINIMIZE GPU time — model loaded once per warm container
+    (`@modal.enter`), `scaledown_window` keeps it warm briefly then scales to
+    zero (no idle cost), weights cached on a Volume, short clips, reports its own
+    `gpuSeconds`, secret-gated via `x-worker-secret`.
+  - **.env.example** documented all `MODAL_*` vars; `.gitignore` for the ledger.
+- **What the user must do (can't be done from here):** `pip install modal`,
+  `modal token new`, `modal secret create makeadclips-worker WORKER_SECRET=…`,
+  `modal deploy modal/video_worker.py`, then set `VIDEO_MODEL=modal-video` +
+  `MODAL_VIDEO_ENDPOINT`/`MODAL_WORKER_SECRET`/`MODAL_GPU_USD_PER_SECOND` in
+  `.env.local`. Also set a hard spend limit in the Modal dashboard (our ledger
+  is an estimate; the dashboard limit is the authoritative backstop).
+- **Verification:** `npm run lint` clean · `npm test` **136/136** (ledger
+  persistence/reset/budget-gate; router: modal-when-configured-&-under-budget,
+  fallback-when-unconfigured, fallback-when-budget-exhausted) · `npm run build`
+  OK. No GPU/paid calls in tests (all mocked). The live Modal worker is
+  UNVERIFIED until the user deploys it.
+- **Branch/PR:** `feat/modal-video-provider`.

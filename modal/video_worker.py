@@ -1,0 +1,154 @@
+"""
+Modal GPU video worker for MakeAdClips (self-hosted, budget-conscious).
+
+WHAT THIS IS
+------------
+A Modal web endpoint that runs an open-source text/image -> video model on a
+GPU and returns base64 MP4 FOOTAGE. The Next.js app calls it; the ffmpeg
+compositor still renders all exact copy (brand/URL/price/CTA), so this worker
+never has to produce readable text.
+
+COST DISCIPLINE (per-second GPU billing)
+----------------------------------------
+Modal bills GPU time per second, so this worker is built to minimize GPU
+wall-time:
+  * `@app.cls` with `scaledown_window` keeps ONE warm container so the model is
+    loaded ONCE (via `@modal.enter`), not per request — cold starts are the main
+    cost sink.
+  * `min_containers=0` so it scales to zero when idle (you pay nothing idle).
+  * It measures and RETURNS the GPU wall-time it used (`gpuSeconds`) so the app
+    can estimate spend and enforce the $30/month budget.
+  * Short default clips; a hard max.
+Set a HARD spend limit in the Modal dashboard too — this worker is the fast
+path, the dashboard limit is the real backstop.
+
+DEPLOY
+------
+  pip install modal
+  modal token new                      # one-time auth on your machine
+  modal secret create makeadclips-worker WORKER_SECRET=<a-long-random-string>
+  modal deploy modal/video_worker.py   # prints the https://...modal.run URL
+
+Then in the Next.js app's .env.local:
+  VIDEO_PROVIDER=gemini
+  VIDEO_MODEL=modal-video
+  MODAL_VIDEO_ENDPOINT=<the printed URL>
+  MODAL_WORKER_SECRET=<same WORKER_SECRET>
+  MODAL_GPU_USD_PER_SECOND=<the per-second rate of the GPU below>
+
+MODEL
+-----
+Defaults to LTX-Video (Lightricks) — fast, low-VRAM, Apache-2.0, good for short
+clips — the cheapest viable first path. Swap MODEL_ID / the pipeline for another
+open model later without changing the Next.js side (the HTTP contract is fixed).
+"""
+
+import base64
+import io
+import os
+import time
+
+import modal
+
+# ---- GPU selection -------------------------------------------------------
+# L4 (24GB) is a good price/perf default for LTX short clips. If you change it,
+# also update MODAL_GPU_USD_PER_SECOND in the app's env to match Modal's rate
+# for that GPU so the spend estimate stays accurate.
+GPU = os.environ.get("MAC_WORKER_GPU", "L4")
+MODEL_ID = os.environ.get("MAC_WORKER_MODEL", "Lightricks/LTX-Video")
+
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install(
+        "torch",
+        "diffusers>=0.32.0",
+        "transformers>=4.44.0",
+        "accelerate",
+        "imageio[ffmpeg]",
+        "sentencepiece",
+        "pillow",
+    )
+)
+
+app = modal.App("makeadclips-video-worker")
+
+# Cache model weights on a Volume so they download ONCE, not per cold start
+# (another big GPU-time saver).
+weights = modal.Volume.from_name("makeadclips-weights", create_if_missing=True)
+WEIGHTS_DIR = "/weights"
+
+MAX_SECONDS = 8
+DEFAULT_FPS = 24
+
+
+@app.cls(
+    image=image,
+    gpu=GPU,
+    volumes={WEIGHTS_DIR: weights},
+    secrets=[modal.Secret.from_name("makeadclips-worker")],
+    scaledown_window=120,   # stay warm 2 min after a request (avoid reloads)
+    min_containers=0,       # scale to zero when idle → no idle cost
+    timeout=600,
+)
+class VideoWorker:
+    @modal.enter()
+    def load(self):
+        """Load the model ONCE per container (not per request)."""
+        import torch
+        from diffusers import LTXPipeline
+
+        os.environ.setdefault("HF_HOME", WEIGHTS_DIR)
+        self.torch = torch
+        self.pipe = LTXPipeline.from_pretrained(
+            MODEL_ID, torch_dtype=torch.bfloat16, cache_dir=WEIGHTS_DIR
+        ).to("cuda")
+
+    def _dims(self, aspect_ratio):
+        # Keep resolution modest to bound GPU time; compositor upscales/pads.
+        return (704, 480) if aspect_ratio == "16:9" else (480, 704)
+
+    @modal.fastapi_endpoint(method="POST")
+    def generate(self, payload: dict, request):
+        """HTTP entrypoint. Returns {videoBase64, mimeType, gpuSeconds, model}."""
+        from fastapi import HTTPException
+
+        # ---- auth: reject anything without the correct shared secret ----
+        expected = os.environ.get("WORKER_SECRET", "")
+        if expected:
+            got = request.headers.get("x-worker-secret", "")
+            if got != expected:
+                raise HTTPException(status_code=401, detail="bad worker secret")
+
+        gpu_start = time.time()
+        try:
+            prompt = (payload or {}).get("prompt") or ""
+            if not prompt.strip():
+                return {"error": "empty prompt"}
+            seconds = min(MAX_SECONDS, int((payload or {}).get("durationSeconds") or 5))
+            width, height = self._dims((payload or {}).get("aspectRatio"))
+            num_frames = max(24, seconds * DEFAULT_FPS)
+
+            out = self.pipe(
+                prompt=prompt,
+                width=width,
+                height=height,
+                num_frames=num_frames,
+                num_inference_steps=int(os.environ.get("MAC_WORKER_STEPS", "30")),
+            )
+            frames = out.frames[0]
+
+            # Encode frames -> mp4 in-memory.
+            import imageio
+            buf = io.BytesIO()
+            imageio.mimsave(buf, frames, format="mp4", fps=DEFAULT_FPS)
+            video_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+            gpu_seconds = round(time.time() - gpu_start, 2)
+            return {
+                "videoBase64": video_b64,
+                "mimeType": "video/mp4",
+                "gpuSeconds": gpu_seconds,
+                "model": MODEL_ID,
+            }
+        except Exception as e:  # noqa: BLE001
+            return {"error": f"{type(e).__name__}: {e}", "gpuSeconds": round(time.time() - gpu_start, 2)}
