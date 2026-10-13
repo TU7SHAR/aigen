@@ -29,6 +29,15 @@ const RESOLUTIONS = ["360p", "720p", "1080p"];
 const ALLOWED_MIME = ["image/png", "image/jpeg", "image/webp"];
 const MAX_BYTES = 5 * 1024 * 1024;
 
+// Production formats. Deterministic ones render a finished MP4 from your real
+// assets + exact copy (no paid model). "generative" is gated behind the paid
+// kill-switch (returns a reviewable dry-run plan while paid gen is disabled).
+const FORMATS = [
+  { id: "screen_demo", label: "Screen demo / explainer", hint: "Animate your real screenshots — no AI video cost", kind: "deterministic" },
+  { id: "cinematic_card", label: "Narrated brand card", hint: "Branded title-card ad from your assets — no AI video cost", kind: "deterministic" },
+  { id: "generative", label: "Generative cinematic", hint: "AI-generated footage (paid; dry-run while disabled)", kind: "generative" },
+];
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -56,6 +65,9 @@ export default function Studio() {
     aspectRatio: "9:16",
     resolution: "720p",
     durationSeconds: 8,
+    // Production format. Default = deterministic screen-based render (real
+    // assets + exact text, NO paid model). "generative" is gated/dry-run.
+    format: "screen_demo",
   });
   // When the user hand-edits the prompt we store it here; otherwise the prompt
   // is derived from the form via useMemo (no setState-in-effect).
@@ -267,6 +279,10 @@ export default function Studio() {
       // The primary flows to the hero image; the rest are recorded context.
       referenceAssets:
         !image && imported?.referenceAssets?.length ? imported.referenceAssets : undefined,
+      // All selected real screenshots the screen-based renderer may animate.
+      galleryUrls: imported?.referenceAssets?.length
+        ? imported.referenceAssets.map((a) => a.url)
+        : undefined,
       // Back-compat single reference when no multi-selection is present.
       referenceAssetUrl:
         !image && !imported?.referenceAssets?.length && imported?.referenceAssetUrl
@@ -498,6 +514,33 @@ export default function Studio() {
             </Field>
           </div>
 
+          {/* Production format — determines the ACTUAL production route */}
+          <Field label="Video format">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {FORMATS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => update("format")(f.id)}
+                  className={`rounded-brand border p-3 text-left text-sm transition ${
+                    form.format === f.id ? "border-accent bg-surface" : "border-line bg-surface hover:border-ink"
+                  }`}
+                >
+                  <div className="font-medium">
+                    {form.format === f.id && <span className="text-accent">▸ </span>}
+                    {f.label}
+                  </div>
+                  <div className="mono-meta mt-0.5">{f.hint}</div>
+                  {f.kind === "deterministic" ? (
+                    <div className="mt-1 text-[11px] text-accent">✓ Available now · no AI-video credits</div>
+                  ) : (
+                    <div className="mt-1 text-[11px] text-muted">Dry-run while paid generation is disabled</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </Field>
+
           {/* Template */}
           <Field label="Ad template">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -655,12 +698,73 @@ export default function Studio() {
             </div>
           )}
 
-          {result && (
+          {result?.dryRun && (
+            <div className="card space-y-3 p-5">
+              <div className="accent-chip !rounded-md">
+                <span className="accent-dot" />
+                <span className="mono-meta !text-ink">Dry run — no video generated, no credits spent</span>
+              </div>
+              <p className="text-sm text-muted">{result.note}</p>
+              {result.plan && (
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <div className="eyebrow mb-1">Offering</div>
+                    <div className="break-anywhere">
+                      <b>{result.plan.offering.brand || result.plan.offering.name}</b>
+                      {result.plan.offering.category ? ` · ${result.plan.offering.category}` : ""}
+                      {result.plan.offering.offering ? ` — ${result.plan.offering.offering}` : ""}
+                    </div>
+                  </div>
+                  {result.plan.message?.centralMessage && (
+                    <div>
+                      <div className="eyebrow mb-1">Central message</div>
+                      <div className="break-anywhere">{result.plan.message.centralMessage}</div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="eyebrow mb-1">Storyboard</div>
+                    <ol className="list-decimal space-y-1 pl-5">
+                      {result.plan.storyboard.map((s) => (
+                        <li key={s.scene} className="break-anywhere">
+                          <b>{s.purpose}</b> ({s.durationSec}s): {s.visual}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                  <div>
+                    <div className="eyebrow mb-1">Exact on-screen copy (rendered by compositor, not the model)</div>
+                    <ul className="list-disc pl-5">
+                      {result.plan.deterministicCopy.brand && <li>Brand: {result.plan.deterministicCopy.brand}</li>}
+                      {result.plan.deterministicCopy.offer && <li>Offer: {result.plan.deterministicCopy.offer}</li>}
+                      {result.plan.deterministicCopy.cta && <li>CTA: {result.plan.deterministicCopy.cta}</li>}
+                    </ul>
+                  </div>
+                  <div className="mono-meta">
+                    Est. cost if generated: ${Number(result.plan.estimatedCost?.amountUsd ?? 0).toFixed(2)}
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-muted">
+                Tip: choose a <b>Screen demo</b> or <b>Narrated brand card</b> format to produce a
+                real finished video now, with no paid generation.
+              </p>
+            </div>
+          )}
+
+          {result && !result.dryRun && (
             <div className="card space-y-3 p-5">
               {result.mock && (
                 <div className="accent-chip !rounded-md">
                   <span className="accent-dot" />
                   <span className="mono-meta !text-ink">Mock — placeholder, not real generation</span>
+                </div>
+              )}
+              {result.deterministic && (
+                <div className="accent-chip !rounded-md">
+                  <span className="accent-dot" />
+                  <span className="mono-meta !text-ink">
+                    Rendered from your real assets · {result.render?.usedImages ?? 0} image(s) · no AI-video cost
+                  </span>
                 </div>
               )}
               {/* Media canvas stays neutral-dark in both themes for media fidelity. */}

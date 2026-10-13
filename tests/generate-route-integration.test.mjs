@@ -26,13 +26,20 @@ import sharp from "sharp";
 import { LocalAssetStore } from "../lib/assets/store.js";
 import { selectReference } from "../lib/assets/selectReference.js";
 
-// Force the mock provider (default, but be explicit so no paid path is possible).
+// This suite exercises the GENERATIVE provider route (reference image reaching
+// the provider). The provider is MOCK (free, no network), so lifting the hard
+// paid-disable does NOT spend anything — mock short-circuits before any paid
+// call. format:"generative" selects the provider route (not the compositor).
 process.env.VIDEO_PROVIDER = "mock";
+process.env.DISABLE_PAID_GENERATION = "false"; // allow the generative route; mock is free
 delete process.env.ENABLE_PAID_GENERATION;
 
 // Import the REAL server pipeline (the same code the Next POST handler wraps)
 // AFTER setting env so config reads the mock provider.
 const { runGenerate, __resetGenerateGuards } = await import("../lib/api/generateCore.js");
+
+/** Add format:"generative" so the request routes to the (mock) provider. */
+const gen = (p) => ({ ...p, format: "generative" });
 
 const cleanup = [];
 let importResult; // stands in for importSource(...)'s asset-bearing output
@@ -102,7 +109,7 @@ test("review handoff → /api/generate uses the selected reference as the provid
   };
 
   __resetGenerateGuards();
-  const { status, body: json } = await runGenerate(payload);
+  const { status, body: json } = await runGenerate(gen(payload));
   assert.equal(status, 200, `expected 200, got ${status}: ${JSON.stringify(json).slice(0, 200)}`);
 
   assert.equal(json.ok, true);
@@ -127,7 +134,7 @@ test("no reference selected → generate proceeds as honest text-to-video (no im
     clientRequestId: "itest-ref-2",
   };
   __resetGenerateGuards();
-  const { status, body: json } = await runGenerate(payload);
+  const { status, body: json } = await runGenerate(gen(payload));
   assert.equal(status, 200);
   assert.equal(json.ok, true);
   assert.equal(json.receivedRequest.hasImage, false);
