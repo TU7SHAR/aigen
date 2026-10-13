@@ -67,6 +67,8 @@ image = (
         "imageio[ffmpeg]",
         "sentencepiece",
         "pillow",
+        # Required for @modal.fastapi_endpoint (Modal no longer auto-installs it).
+        "fastapi[standard]",
     )
 )
 
@@ -126,21 +128,41 @@ class VideoWorker:
                 return {"error": "empty prompt"}
             seconds = min(MAX_SECONDS, int((payload or {}).get("durationSeconds") or 5))
             width, height = self._dims((payload or {}).get("aspectRatio"))
-            num_frames = max(24, seconds * DEFAULT_FPS)
 
+            # LTX-Video requires num_frames ≡ 1 (mod 8). Snap to a valid count.
+            raw_frames = seconds * DEFAULT_FPS
+            num_frames = max(25, ((raw_frames // 8) * 8) + 1)
+
+            negative_prompt = (
+                "worst quality, inconsistent motion, blurry, jittery, distorted, "
+                "text, watermark, logo, caption, subtitles"
+            )
             out = self.pipe(
                 prompt=prompt,
+                negative_prompt=negative_prompt,
                 width=width,
                 height=height,
                 num_frames=num_frames,
+                decode_timestep=0.03,
+                decode_noise_scale=0.025,
                 num_inference_steps=int(os.environ.get("MAC_WORKER_STEPS", "30")),
             )
             frames = out.frames[0]
 
-            # Encode frames -> mp4 in-memory.
+            # Encode frames -> mp4 in-memory. LTX returns PIL frames or float
+            # arrays; normalize to uint8 numpy for imageio.
+            import numpy as np
             import imageio
+
+            norm = []
+            for fr in frames:
+                arr = np.asarray(fr)
+                if arr.dtype != np.uint8:
+                    arr = np.clip(arr * 255.0, 0, 255).astype(np.uint8) if arr.max() <= 1.0 else arr.astype(np.uint8)
+                norm.append(arr)
+
             buf = io.BytesIO()
-            imageio.mimsave(buf, frames, format="mp4", fps=DEFAULT_FPS)
+            imageio.mimwrite(buf, norm, format="mp4", fps=DEFAULT_FPS, codec="libx264")
             video_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
 
             gpu_seconds = round(time.time() - gpu_start, 2)
@@ -149,6 +171,7 @@ class VideoWorker:
                 "mimeType": "video/mp4",
                 "gpuSeconds": gpu_seconds,
                 "model": MODEL_ID,
+                "numFrames": num_frames,
             }
         except Exception as e:  # noqa: BLE001
             return {"error": f"{type(e).__name__}: {e}", "gpuSeconds": round(time.time() - gpu_start, 2)}
