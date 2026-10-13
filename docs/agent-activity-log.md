@@ -1,5 +1,58 @@
 # Agent activity log
 
+## 2026-10-11 — Product rebuild PR 1: real automated compositor + source-faithful screen-based ad (no paid model)
+
+- **Asked:** the paid BhavishAI ad was unusable (invented UI, gibberish copy,
+  wrong URL, fabricated 55% discount). Root cause: the pipeline told the video
+  model to "add overlays in post" but there was NO compositor — it returned the
+  raw generative MP4, so the model hallucinated all the critical text. Build a
+  REAL finishing pipeline + a reliable screen-based ad path that produces a
+  finished MP4 with ZERO paid generative calls, and a hard dry-run gate.
+- **Did (first vertical slice):**
+  - **Priority 0 — hard paid gate + dry-run** (`lib/config.js`,
+    `lib/api/generateCore.js`): `isPaidGenerationHardDisabled()` (default ON) and
+    `isDryRun()`. The `generative` format, while paid is hard-disabled, returns a
+    full **dry-run plan** (offering, format, message, storyboard, selected
+    assets, exact copy, final model request, estimated cost) and **spends
+    nothing**. Deterministic formats render for real.
+  - **Priority 1 — real compositor** (`lib/render/ffmpeg.js`,
+    `screenRenderer.js`, `textImage.js`, `compositor.js`): bundled static
+    **ffmpeg** (`ffmpeg-static`/`ffprobe-static`, no system install). ALL
+    required copy (brand, headline, offer, URL, CTA) is rendered
+    **deterministically** as PNG text overlays (sharp/SVG + vendored Noto font)
+    and composited with ffmpeg `overlay` — the model never draws it. Exact
+    strings only; nothing fabricated (no offer provided ⇒ no offer drawn).
+  - **Priority 2 — screen-based renderer**: animates REAL imported screenshots
+    (`public/imported-assets`) with controlled Ken Burns (zoompan pan/zoom) over
+    a brand backdrop (contain, never stretch), crossfades scenes, adds a silent
+    track, outputs a finished MP4. No real image ⇒ clean branded title cards,
+    **never a fabricated UI**. Registered as `screen_demo`/`cinematic_card`
+    formats (the new DEFAULT), deterministic + free.
+  - **Fix (deployment bug):** `ffmpeg-static` path was rewritten to a non-existent
+    `/ROOT/...` by Next's build → runtime ENOENT. Hardened `ffmpegBinary()` to
+    resolve at runtime (export → `require.resolve` fallback → `FFMPEG_PATH`), and
+    added `serverExternalPackages` + `outputFileTracingIncludes` for the binaries
+    and fonts in `next.config.mjs`.
+  - **UI** (`components/studio/Studio.js`): a Video-Format selector (screen demo
+    / narrated brand card / generative) marking what's available-now vs dry-run,
+    sends `format` + `galleryUrls`, and renders the dry-run plan panel.
+- **Files:** `lib/render/{ffmpeg,screenRenderer,textImage,compositor}.js` (new),
+  `assets/fonts/NotoSans-{Regular,Bold}.ttf` (vendored), `lib/config.js`,
+  `lib/validation.js`, `lib/api/generateCore.js`, `components/studio/Studio.js`,
+  `next.config.mjs`, `.env.example`, `package.json` (ffmpeg deps),
+  `tests/{compositor-route,compositor-unit}.test.mjs` (new),
+  `tests/{generate-route-integration,product-controls}.test.mjs` (updated for the
+  new default route).
+- **Verification:** `npm run lint` clean · `npm test` **135/135** ·
+  `npm run build` OK. **Visual proof**: extracted a frame showing the real
+  screenshot + crisp exact "BhavishAI" brand + wrapped headline + CTA — no
+  gibberish, no invented UI/discount/URL. **Live HTTP** (`POST /api/generate`,
+  `format: screen_demo`): HTTP 200, `provider: compositor`, 1 real image used,
+  5.6s MP4, **cost $0**, overlays brand+headline+cta. Generative dry-run over
+  HTTP: `dryRun:true`, no video, 3-scene storyboard, $0. **No paid calls made.**
+- **Branch/PR:** `feat/compositor-screen-ads`.
+
+
 ## 2026-10-11 — Product PR A: multi-image upload, editable product intelligence, user context, asset selection, state propagation
 
 - **Asked:** (priority pivot to product quality) make the app understand +

@@ -19,6 +19,7 @@ import { compileCreativeRequest } from "../lib/creative/compile.js";
 import { LocalAssetStore } from "../lib/assets/store.js";
 
 process.env.VIDEO_PROVIDER = "mock";
+process.env.DISABLE_PAID_GENERATION = "false"; // allow generative route; mock is free
 delete process.env.ENABLE_PAID_GENERATION;
 const { runGenerate, __resetGenerateGuards } = await import("../lib/api/generateCore.js");
 
@@ -102,6 +103,7 @@ test("multiple referenceAssets: flagged primary reaches the provider; selection 
   __resetGenerateGuards();
   const payload = baseInput({
     clientRequestId: "pa-multi-1",
+    format: "generative", // route to the (mock) provider to assert image reached it
     referenceAssets: [
       { url: secondaryUrl, role: "product_screenshot" },
       { url: heroUrl, role: "hero_visual", primary: true },
@@ -121,6 +123,7 @@ test("referenceAssets with no primary flag uses the first selected", async () =>
   __resetGenerateGuards();
   const payload = baseInput({
     clientRequestId: "pa-multi-2",
+    format: "generative",
     referenceAssets: [{ url: heroUrl, role: "hero_visual" }],
   });
   const { status, body } = await runGenerate(payload);
