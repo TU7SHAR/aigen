@@ -671,7 +671,7 @@ export default function Studio() {
               <input
                 type="number"
                 min={3}
-                max={10}
+                max={15}
                 className="input"
                 value={form.durationSeconds}
                 onChange={update("durationSeconds")}
@@ -892,8 +892,22 @@ export default function Studio() {
                 <div className="accent-chip !rounded-md">
                   <span className="accent-dot" />
                   <span className="mono-meta !text-ink">
-                    Rendered from your real assets · {result.render?.usedImages ?? 0} image(s) · no AI-video cost
+                    Rendered from your real assets · {result.render?.usedImages ?? 0} image(s) ·{" "}
+                    {result.render?.generatedKeyframes ?? 0} AI keyframe(s) · no paid AI-video cost
                   </span>
+                </div>
+              )}
+              {/* Quality verification: an honest flag when the output is mostly
+                  empty cards (the black-slideshow failure) rather than a real ad. */}
+              {result.render?.quality?.warnings?.length > 0 && (
+                <div className="alert alert-danger" role="alert">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <div className="break-anywhere">
+                    <b>Quality check</b>
+                    {result.render.quality.warnings.map((w, i) => (
+                      <p key={i} className="text-xs">• {w}</p>
+                    ))}
+                  </div>
                 </div>
               )}
               {/* Media canvas stays neutral-dark in both themes for media fidelity. */}
@@ -937,6 +951,7 @@ export default function Studio() {
                           >
                             {s.aiGenerated ? "AI-GENERATED" : "DETERMINISTIC"} · {s.executedMethod}
                             {s.usedRealAsset ? " · real asset" : ""}
+                            {s.keyframeProvider ? ` · keyframe: ${s.keyframeProvider}${s.keyframeMock ? " (mock)" : ""}` : ""}
                           </span>
                           {s.downgradedFrom && (
                             <span className="block text-muted">
