@@ -84,7 +84,15 @@ export default function Studio() {
   const [imported, setImported] = useState(null); // { productProfile, brandProfile, brandInfluence }
   const [importedImages, setImportedImages] = useState([]); // hero + gallery urls
 
+  // AI Creative Director storyboard for the chosen concept. Generated from the
+  // imported concept + brand evidence (cheap TEXT model; no video cost). It is
+  // the executable, per-shot plan that drives production — NOT user-editable
+  // (read-only review per product vision). `origin` is "ai" or "fallback".
+  const [storyboard, setStoryboard] = useState(null); // { logline, shots, origin, note? }
+  const [storyboardLoading, setStoryboardLoading] = useState(false);
+
   const handleImported = useCallback((payload) => {
+    setStoryboard(null); // new source → regenerate the storyboard from scratch
     setImported({
       productProfile: payload.productProfile,
       brandProfile: payload.brandProfile,
@@ -165,8 +173,9 @@ export default function Studio() {
             designProfile: imported?.designProfile || undefined,
             entityConfidence: imported?.entityConfidence,
             concept: imported?.concept || undefined,
-            // Product PR A: user corrections must be reflected in the PREVIEW
-            // so the prompt the user reviews == the prompt the model receives.
+            // AI Creative Director storyboard drives the scene plan + per-shot
+            // production when present (so the preview matches what will render).
+            storyboard: storyboard || undefined,
             category: imported?.productProfile?.category || undefined,
             offering: imported?.productProfile?.offering || undefined,
             userIntent: imported?.userContext || undefined,
@@ -188,7 +197,70 @@ export default function Studio() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [form, image, imported]);
+  }, [form, image, imported, storyboard]);
+
+  // AI CREATIVE DIRECTOR: once a concept + offering exist, ask the Director for
+  // an executable storyboard. Debounced; cheap TEXT model (no video cost). The
+  // result is read-only (approve or regenerate), per product vision — not an
+  // editable timeline. Degrades to a labeled deterministic storyboard with no key.
+  const buildStoryboard = useCallback(async () => {
+    const concept = imported?.concept;
+    const name = form.productName.trim() || imported?.productProfile?.name;
+    if (!concept || !name) {
+      setStoryboard(null);
+      return;
+    }
+    setStoryboardLoading(true);
+    try {
+      const availableAssets = (imported?.referenceAssets?.length
+        ? imported.referenceAssets
+        : importedImages.map((u) => ({ url: u }))
+      ).map((a) => ({ role: a.role || "image", kind: "image" }));
+      const res = await fetch("/api/creative/storyboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          concept,
+          product: {
+            name,
+            brand: form.brand || imported?.brandProfile?.name,
+            description: form.description || imported?.productProfile?.description,
+            offer: form.offer || undefined,
+            cta: form.cta || undefined,
+            category: imported?.productProfile?.category,
+            offering: imported?.productProfile?.offering,
+            targetCustomer: imported?.productProfile?.targetCustomer,
+          },
+          brand: imported?.brandProfile || null,
+          design: imported?.designProfile || null,
+          entityType: imported?.entityType,
+          durationSeconds: Number(form.durationSeconds),
+          aspectRatio: form.aspectRatio,
+          availableAssets,
+          emphasis: imported?.emphasis?.length ? imported.emphasis : undefined,
+          avoid: imported?.avoid?.length ? imported.avoid : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.storyboard?.shots?.length) {
+        setStoryboard({ ...data.storyboard, origin: data.origin, note: data.note });
+      } else {
+        setStoryboard(null);
+      }
+    } catch {
+      setStoryboard(null);
+    } finally {
+      setStoryboardLoading(false);
+    }
+  }, [imported, form.productName, form.brand, form.description, form.offer, form.cta, form.durationSeconds, form.aspectRatio, importedImages]);
+
+  // Regenerate the storyboard when the concept arrives or key creative fields
+  // change (debounced). Only runs once a concept is present.
+  useEffect(() => {
+    if (!imported?.concept) return;
+    const t = setTimeout(() => { buildStoryboard(); }, 600);
+    return () => clearTimeout(t);
+  }, [imported?.concept, buildStoryboard]);
 
   const editingPrompt = promptEdit !== null;
   const promptPreview = editingPrompt
@@ -269,7 +341,9 @@ export default function Studio() {
       designProfile: imported?.designProfile || undefined,
       entityConfidence: imported?.entityConfidence,
       concept: imported?.concept || undefined,
-      // Product PR A: user corrections propagate into the real generation.
+      // AI Creative Director storyboard: executable per-shot plan that drives
+      // scene planning + per-shot production routing in the compositor.
+      storyboard: storyboard || undefined,
       category: imported?.productProfile?.category || undefined,
       offering: imported?.productProfile?.offering || undefined,
       userIntent: imported?.userContext || undefined,
@@ -629,6 +703,61 @@ export default function Studio() {
               </button>
             )}
           </Field>
+
+          {/* AI Creative Director storyboard — READ-ONLY (approve or regenerate),
+              never an editable timeline. Shown once a concept yields shots. */}
+          {(storyboard || storyboardLoading) && (
+            <section className="card p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="eyebrow">AI storyboard</div>
+                <div className="flex items-center gap-2">
+                  {storyboard?.origin && (
+                    <span className={`mono-meta ${storyboard.origin === "ai" ? "!text-accent" : "text-muted"}`}>
+                      {storyboard.origin === "ai" ? "AI Creative Director" : "deterministic fallback"}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={buildStoryboard}
+                    disabled={storyboardLoading || !imported?.concept}
+                    className="text-xs text-accent underline disabled:opacity-50"
+                  >
+                    {storyboardLoading ? "Generating…" : "Regenerate"}
+                  </button>
+                </div>
+              </div>
+              {storyboard?.logline && (
+                <p className="mt-1 text-sm text-muted break-anywhere">“{storyboard.logline}”</p>
+              )}
+              {storyboard?.note && (
+                <p className="mt-1 text-[11px] text-muted">{storyboard.note}</p>
+              )}
+              {storyboardLoading && !storyboard ? (
+                <div className="mt-3 flex items-center gap-2 text-sm text-muted">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Directing the storyboard…
+                </div>
+              ) : (
+                <ol className="mt-3 space-y-2">
+                  {storyboard?.shots?.map((s, i) => (
+                    <li key={i} className="rounded-brand border border-line bg-surface p-2.5 text-sm">
+                      <div className="mono-meta flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="!text-accent">SHOT {i + 1}</span>
+                        <span>{Number(s.durationSec).toFixed(1)}s</span>
+                        <span>· {s.intent}</span>
+                        <span className="rounded bg-line px-1.5 py-0.5">{s.technique}</span>
+                      </div>
+                      <div className="mt-1 text-ink break-anywhere">{s.visual}</div>
+                      {s.onScreenText && (
+                        <div className="mt-1 text-xs text-muted">
+                          On-screen: <span className="text-ink">“{s.onScreenText}”</span>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          )}
         </div>
 
         {/* RIGHT: generate + result */}
@@ -782,6 +911,49 @@ export default function Studio() {
               >
                 <Download className="h-4 w-4" /> Download MP4
               </a>
+
+              {/* Per-shot production report: honest AI-generated vs deterministic
+                  accounting straight from the compositor's shotReport. */}
+              {result.render?.shotReport?.length > 0 && (
+                <div className="border-t border-line pt-3">
+                  <div className="eyebrow mb-2">
+                    Shot production
+                    {result.render.storyboardOrigin === "ai" ? (
+                      <span className="mono-meta ml-2 !text-accent">AI-directed storyboard</span>
+                    ) : result.render.storyboardDriven ? (
+                      <span className="mono-meta ml-2 text-muted">deterministic storyboard</span>
+                    ) : null}
+                  </div>
+                  <ol className="space-y-1.5 text-xs">
+                    {result.render.shotReport.map((s) => (
+                      <li key={s.shot} className="flex items-start gap-2 break-anywhere">
+                        <span className="mono-meta shrink-0 !text-accent">{String(s.shot).padStart(2, "0")}</span>
+                        <span className="flex-1">
+                          <span className="text-ink">{s.intent || "shot"}</span>{" "}
+                          <span className="text-muted">({Number(s.durationSec).toFixed(1)}s)</span>
+                          <br />
+                          <span
+                            className={`mono-meta ${s.aiGenerated ? "!text-accent" : "text-muted"}`}
+                          >
+                            {s.aiGenerated ? "AI-GENERATED" : "DETERMINISTIC"} · {s.executedMethod}
+                            {s.usedRealAsset ? " · real asset" : ""}
+                          </span>
+                          {s.downgradedFrom && (
+                            <span className="block text-muted">
+                              requested {s.downgradedFrom} — no model frame, rendered deterministically
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="mono-meta mt-2 text-muted">
+                    {result.render.shotReport.filter((s) => s.aiGenerated).length} AI-generated ·{" "}
+                    {result.render.shotReport.filter((s) => !s.aiGenerated).length} deterministic
+                  </p>
+                </div>
+              )}
+
               <div className="mono-meta space-y-1 !normal-case">
                 <div className="uppercase">
                   {result.provider} · {result.model}
