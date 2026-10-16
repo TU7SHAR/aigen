@@ -65,7 +65,7 @@ test("router falls back to mock (honestly) when gemini requested but paid gen di
   const prov = getImageProvider();
   assert.equal(prov.name, "mock");
   assert.equal(prov.mockFallback, true);
-  assert.match(prov.fallbackReason, /disabled/i);
+  assert.match(prov.fallbackReason, /off/i);
   process.env.IMAGE_PROVIDER = prev.ip ?? "";
   process.env.ENABLE_PAID_IMAGE_GENERATION = prev.paid ?? "";
 });
@@ -86,8 +86,9 @@ test("keyframe pass attaches a generated frame to an ai_image shot with no real 
   try {
     assert.equal(kf.generatedCount, 1, "the one ai_image shot got a keyframe");
     const scenes = comp.buildScenes(kf.scenePlan, [], {}, []);
-    assert.equal(scenes[0].executedMethod, "ai_image");
-    assert.ok(scenes[0].imagePath, "ai_image shot now has a real keyframe to animate");
+    // A MOCK keyframe is a placeholder, never reported as AI output.
+    assert.equal(scenes[0].executedMethod, "placeholder_keyframe");
+    assert.equal(scenes[0].downgradedFrom, "ai_image");
     assert.equal(scenes[0].keyframeProvider, "mock");
     assert.equal(scenes[1].executedMethod, "motion_graphic"); // untouched
   } finally {

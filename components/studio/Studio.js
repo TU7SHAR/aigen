@@ -773,6 +773,22 @@ export default function Studio() {
               </span>
             </div>
 
+            {/* Active production providers — real vs mock, straight from the server. */}
+            {status?.providers && (
+              <div className="mono-meta mb-3 space-y-0.5 border-t border-line pt-3 !normal-case">
+                <div>
+                  IMAGES: {status.providers.image.real ? "REAL" : "MOCK"} · {status.providers.image.provider}/{status.providers.image.model}
+                </div>
+                <div>
+                  SCENE VIDEO: {status.providers.sceneVideo.real ? "REAL" : "OFF"} · {status.providers.sceneVideo.model}
+                </div>
+                <div>AUDIO: none (silent)</div>
+                <div className="text-muted">
+                  job cap ${status.providers.budget.maxUsd} · ≤{status.providers.budget.maxImages} img · ≤{status.providers.budget.maxVideoClips} clip
+                </div>
+              </div>
+            )}
+
             {/* Creative readiness (from the server preflight). Blocks generation
                 on obvious problems so credits aren't wasted. */}
             {serverPreview?.preflight && (
@@ -949,15 +965,16 @@ export default function Studio() {
                           <span
                             className={`mono-meta ${s.aiGenerated ? "!text-accent" : "text-muted"}`}
                           >
-                            {s.aiGenerated ? "AI-GENERATED" : "DETERMINISTIC"} · {s.executedMethod}
-                            {s.usedRealAsset ? " · real asset" : ""}
-                            {s.keyframeProvider ? ` · keyframe: ${s.keyframeProvider}${s.keyframeMock ? " (mock)" : ""}` : ""}
+                            {s.aiGenerated ? "AI-GENERATED" : "DETERMINISTIC"} · {s.visualSource || s.executedMethod}
                           </span>
                           {s.downgradedFrom && (
                             <span className="block text-muted">
-                              requested {s.downgradedFrom} — no model frame, rendered deterministically
+                              requested {s.downgradedFrom} — not produced by a real model
                             </span>
                           )}
+                          {s.productionNotes?.map((n, k) => (
+                            <span key={k} className="block text-muted">{n}</span>
+                          ))}
                         </span>
                       </li>
                     ))}
