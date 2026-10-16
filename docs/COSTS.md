@@ -99,6 +99,16 @@ Which steps can incur cost:
 | Firecrawl crawl (only when it falls back / is forced) | Firecrawl per-request cost |
 | **AI source enrichment** (`/api/products/import`) | Gemini **TEXT** tokens (cheap Flash-Lite); tracked separately via `recordEnrichmentSpend` |
 | Video generation (`/api/generate`) | Gemini **video** tokens (the expensive meter) |
+| Storyboard `ai_video` shots (`screen_demo` engine) | Veo per output second (3.1 Fast ≈ $0.10–0.15/s at 720p; 4 s clip reserved at $0.60) |
+| Voiceover + music bed (`screen_demo` engine) | Gemini TTS ≈ $0.01 per 15 s line + Lyria 3 Clip ≈ $0.04 (reserved $0.05 + $0.10) |
+
+**Measured (2026-10-16, real runs):** a 13 s BhavishAI ad = 2 Veo 3.1 Fast clips
++ 1 voiceover + 1 music bed → **$1.35 reserved** (worst case; list price ≈
+$0.85). A 12 s Death Wish Coffee ad = 3 clips + audio → **$1.95 reserved**
+(list ≈ $1.25). A Veo attempt blocked by its audio safety filter states it was
+not billed; the budget releases that reservation and the shot is retried once
+with a rephrased prompt. With `SCENE_MEDIA_CACHE_DIR` set, re-rendering an
+unchanged plan costs $0 (all media reused).
 
 Enrichment cost is reported per-import under `aiEnrichment.cost` and accumulated
 separately from video spend, so the cheap "understand the source" stage and the
