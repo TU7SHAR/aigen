@@ -471,9 +471,9 @@ export default function Studio() {
               </span>
               {importedImages.length > 0 && (
                 <div className="mt-2 flex gap-2 overflow-x-auto">
-                  {importedImages.slice(0, 6).map((u) => (
+                  {[...new Set(importedImages)].slice(0, 6).map((u, i) => (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img key={u} src={u} alt="" className="h-14 w-14 shrink-0 rounded border border-line object-contain" />
+                    <img key={`${u}#${i}`} src={u} alt="" className="h-14 w-14 shrink-0 rounded border border-line object-contain" />
                   ))}
                 </div>
               )}
