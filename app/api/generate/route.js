@@ -12,8 +12,9 @@
  * within the plan's execution limit (documented in docs/ARCHITECTURE.md).
  */
 
-import { NextResponse } from "next/server";
+import { NextResponse, connection } from "next/server";
 import { runGenerate } from "@/lib/api/generateCore.js";
+import { getProviderStatus } from "@/lib/ai/providerStatus.js";
 import { getModelInfo, deprecationWarning } from "@/lib/ai/modelRegistry.js";
 import {
   isPaidGenerationEnabled,
@@ -41,9 +42,12 @@ export async function POST(request) {
 }
 
 export async function GET() {
-  // Lightweight capability/status probe for the UI.
+  // Lightweight capability/status probe for the UI. Must run per request (it
+  // reads env + the spend ledger), so opt out of prerendering.
+  await connection();
   const model = getModelInfo();
   return NextResponse.json({
+    providers: await getProviderStatus(),
     provider: getProviderName(),
     paidGenerationEnabled: isPaidGenerationEnabled(),
     devSpendLimitUsd: getDevSpendLimitUsd(),

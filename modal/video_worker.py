@@ -50,6 +50,11 @@ import time
 
 import modal
 
+try:  # resolved inside the container (fastapi is in the image)
+    from fastapi import Request
+except ImportError:  # local `modal deploy` machine without fastapi
+    Request = object
+
 # ---- GPU selection -------------------------------------------------------
 # L4 (24GB) is a good price/perf default for LTX short clips. If you change it,
 # also update MODAL_GPU_USD_PER_SECOND in the app's env to match Modal's rate
@@ -97,36 +102,39 @@ class VideoWorker:
     def load(self):
         """Load the model ONCE per container (not per request)."""
         import torch
-        from diffusers import LTXPipeline
+        from diffusers import LTXPipeline, LTXImageToVideoPipeline
 
         os.environ.setdefault("HF_HOME", WEIGHTS_DIR)
         self.torch = torch
         self.pipe = LTXPipeline.from_pretrained(
             MODEL_ID, torch_dtype=torch.bfloat16, cache_dir=WEIGHTS_DIR
         ).to("cuda")
+        # Image->video shares the SAME weights (no extra VRAM / download).
+        self.i2v = LTXImageToVideoPipeline(**self.pipe.components)
 
     def _dims(self, aspect_ratio):
         # Keep resolution modest to bound GPU time; compositor upscales/pads.
         return (704, 480) if aspect_ratio == "16:9" else (480, 704)
 
     @modal.fastapi_endpoint(method="POST")
-    def generate(self, payload: dict, request):
-        """HTTP entrypoint. Returns {videoBase64, mimeType, gpuSeconds, model}."""
+    def generate(self, payload: dict, request: Request):
+        """HTTP entrypoint. Returns {videoBase64, mimeType, gpuSeconds, model, mode}."""
         from fastapi import HTTPException
 
         # ---- auth: reject anything without the correct shared secret ----
         expected = os.environ.get("WORKER_SECRET", "")
-        if expected:
-            got = request.headers.get("x-worker-secret", "")
-            if got != expected:
-                raise HTTPException(status_code=401, detail="bad worker secret")
+        if not expected:
+            raise HTTPException(status_code=503, detail="worker secret not configured")
+        got = request.headers.get("x-worker-secret", "")
+        if got != expected:
+            raise HTTPException(status_code=401, detail="bad worker secret")
 
         gpu_start = time.time()
         try:
             prompt = (payload or {}).get("prompt") or ""
             if not prompt.strip():
-                return {"error": "empty prompt"}
-            seconds = min(MAX_SECONDS, int((payload or {}).get("durationSeconds") or 5))
+                return {"error": "empty prompt", "gpuSeconds": 0}
+            seconds = max(2, min(MAX_SECONDS, int((payload or {}).get("durationSeconds") or 4)))
             width, height = self._dims((payload or {}).get("aspectRatio"))
 
             # LTX-Video requires num_frames ≡ 1 (mod 8). Snap to a valid count.
@@ -137,7 +145,7 @@ class VideoWorker:
                 "worst quality, inconsistent motion, blurry, jittery, distorted, "
                 "text, watermark, logo, caption, subtitles"
             )
-            out = self.pipe(
+            common = dict(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
                 width=width,
@@ -147,6 +155,17 @@ class VideoWorker:
                 decode_noise_scale=0.025,
                 num_inference_steps=int(os.environ.get("MAC_WORKER_STEPS", "30")),
             )
+            image_b64 = (payload or {}).get("image")
+            mode = "t2v"
+            if image_b64:
+                from PIL import Image as PILImage
+
+                still = PILImage.open(io.BytesIO(base64.b64decode(image_b64))).convert("RGB")
+                still = still.resize((width, height))
+                out = self.i2v(image=still, **common)
+                mode = "i2v"
+            else:
+                out = self.pipe(**common)
             frames = out.frames[0]
 
             # Encode frames -> mp4 in-memory. LTX returns PIL frames or float
@@ -172,6 +191,23 @@ class VideoWorker:
                 "gpuSeconds": gpu_seconds,
                 "model": MODEL_ID,
                 "numFrames": num_frames,
+                "mode": mode,
             }
         except Exception as e:  # noqa: BLE001
             return {"error": f"{type(e).__name__}: {e}", "gpuSeconds": round(time.time() - gpu_start, 2)}
+
+
+# CPU-only capability probe: lets the app verify the deployed worker contract
+# WITHOUT starting a GPU container (requests to the class endpoint above would
+# boot an L4 and load the model, which is billable).
+@app.function(image=modal.Image.debian_slim(python_version="3.11").pip_install("fastapi[standard]"), cpu=0.25)
+@modal.fastapi_endpoint(method="GET")
+def health():
+    return {
+        "ok": True,
+        "contract": 2,
+        "model": MODEL_ID,
+        "gpu": GPU,
+        "modes": ["t2v", "i2v"],
+        "maxSeconds": MAX_SECONDS,
+    }

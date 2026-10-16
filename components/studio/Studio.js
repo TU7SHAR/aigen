@@ -671,7 +671,7 @@ export default function Studio() {
               <input
                 type="number"
                 min={3}
-                max={10}
+                max={15}
                 className="input"
                 value={form.durationSeconds}
                 onChange={update("durationSeconds")}
@@ -772,6 +772,22 @@ export default function Studio() {
                 {(status?.model?.label || "MODEL").toUpperCase()}
               </span>
             </div>
+
+            {/* Active production providers — real vs mock, straight from the server. */}
+            {status?.providers && (
+              <div className="mono-meta mb-3 space-y-0.5 border-t border-line pt-3 !normal-case">
+                <div>
+                  IMAGES: {status.providers.image.real ? "REAL" : "MOCK"} · {status.providers.image.provider}/{status.providers.image.model}
+                </div>
+                <div>
+                  SCENE VIDEO: {status.providers.sceneVideo.real ? "REAL" : "OFF"} · {status.providers.sceneVideo.model}
+                </div>
+                <div>AUDIO: none (silent)</div>
+                <div className="text-muted">
+                  job cap ${status.providers.budget.maxUsd} · ≤{status.providers.budget.maxImages} img · ≤{status.providers.budget.maxVideoClips} clip
+                </div>
+              </div>
+            )}
 
             {/* Creative readiness (from the server preflight). Blocks generation
                 on obvious problems so credits aren't wasted. */}
@@ -892,8 +908,22 @@ export default function Studio() {
                 <div className="accent-chip !rounded-md">
                   <span className="accent-dot" />
                   <span className="mono-meta !text-ink">
-                    Rendered from your real assets · {result.render?.usedImages ?? 0} image(s) · no AI-video cost
+                    Rendered from your real assets · {result.render?.usedImages ?? 0} image(s) ·{" "}
+                    {result.render?.generatedKeyframes ?? 0} AI keyframe(s) · no paid AI-video cost
                   </span>
+                </div>
+              )}
+              {/* Quality verification: an honest flag when the output is mostly
+                  empty cards (the black-slideshow failure) rather than a real ad. */}
+              {result.render?.quality?.warnings?.length > 0 && (
+                <div className="alert alert-danger" role="alert">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <div className="break-anywhere">
+                    <b>Quality check</b>
+                    {result.render.quality.warnings.map((w, i) => (
+                      <p key={i} className="text-xs">• {w}</p>
+                    ))}
+                  </div>
                 </div>
               )}
               {/* Media canvas stays neutral-dark in both themes for media fidelity. */}
@@ -935,14 +965,16 @@ export default function Studio() {
                           <span
                             className={`mono-meta ${s.aiGenerated ? "!text-accent" : "text-muted"}`}
                           >
-                            {s.aiGenerated ? "AI-GENERATED" : "DETERMINISTIC"} · {s.executedMethod}
-                            {s.usedRealAsset ? " · real asset" : ""}
+                            {s.aiGenerated ? "AI-GENERATED" : "DETERMINISTIC"} · {s.visualSource || s.executedMethod}
                           </span>
                           {s.downgradedFrom && (
                             <span className="block text-muted">
-                              requested {s.downgradedFrom} — no model frame, rendered deterministically
+                              requested {s.downgradedFrom} — not produced by a real model
                             </span>
                           )}
+                          {s.productionNotes?.map((n, k) => (
+                            <span key={k} className="block text-muted">{n}</span>
+                          ))}
                         </span>
                       </li>
                     ))}

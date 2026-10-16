@@ -21,41 +21,42 @@ const OUT = path.join(process.cwd(), "demo-output");
 /** Two brands, two different concepts → structurally different storyboards. */
 const BRANDS = [
   {
-    slug: "northwind-saas",
-    label: "Northwind Analytics (SaaS)",
-    sourceImage: "/imported-assets/361b26a86f3ee951bdf92c14.png",
-    sourceRole: "screenshot",
+    slug: "bhavishai",
+    label: "BhavishAI (Vedic astrology SaaS) — the one that failed",
+    sourceImage: null,
+    sourceRole: null,
     body: {
-      productName: "Northwind Analytics",
-      brand: "Northwind",
-      description: "Real-time product analytics that turn raw events into decisions.",
-      offer: "First 14 days free",
-      cta: "Start free",
+      productName: "BhavishAI",
+      brand: "BhavishAI",
+      description: "Personalized Vedic astrology guidance powered by AI — precise, private, always available.",
+      offer: "Guidance Membership from ₹299/month",
+      cta: "Start your reading",
       entityType: "saas",
       format: "screen_demo",
-      template: "product-demo",
-      aspectRatio: "16:9",
+      template: "problem-solution",
+      aspectRatio: "9:16",
       resolution: "360p",
-      durationSeconds: 8,
-      concept: { title: "From noise to clarity", centralMessage: "See what your product data is really telling you" },
-      referenceAssets: [{ url: "/imported-assets/361b26a86f3ee951bdf92c14.png", role: "screenshot", primary: true }],
-      galleryUrls: ["/imported-assets/361b26a86f3ee951bdf92c14.png"],
-      // AI-shaped storyboard (as /api/creative/storyboard would return).
+      durationSeconds: 12,
+      productProfile: { canonicalUrl: "https://bhavishai.in", brandColors: ["#2b1a6e", "#ff8a3d"] },
+      concept: { title: "From generic to genuinely yours", centralMessage: "Vedic precision for your life, not a generic horoscope" },
+      // AI-shaped storyboard: NO real asset available → ai_image shots must
+      // produce real keyframes, not black cards. This is the failure case.
       storyboard: {
         origin: "ai",
-        logline: "Turn scattered metrics into one clear signal.",
-        totalDurationSec: 8,
+        logline: "Stop reading generic horoscopes — get guidance that is actually yours.",
+        totalDurationSec: 12,
         shots: [
-          { intent: "hook", durationSec: 2, technique: "motion_graphic", assetHint: "none", visual: "Kinetic type: data points converging", onScreenText: "Drowning in dashboards?", motion: "kinetic", transitionOut: "cut" },
-          { intent: "proof", durationSec: 3.5, technique: "real_asset", assetHint: "screenshot", visual: "Animate the live analytics dashboard", onScreenText: "See what your data is telling you", motion: "slow push-in", transitionOut: "fade" },
-          { intent: "cta", durationSec: 2.5, technique: "motion_graphic", assetHint: "logo", visual: "Brand end card with CTA", onScreenText: "Start free", motion: "hold", transitionOut: "end" },
+          { intent: "hook", durationSec: 2.5, technique: "ai_image", assetHint: "none", visual: "A lone person looking at a phone under a vast night sky full of stars, dawn light on the horizon", onScreenText: "Stop reading generic horoscopes", motion: "slow push-in", transitionOut: "fade" },
+          { intent: "turn", durationSec: 3, technique: "ai_image", assetHint: "none", visual: "Abstract constellation lines resolving into a focused, personal chart; warm brand-colored glow", onScreenText: "Vedic precision for your life", motion: "drift", transitionOut: "cut" },
+          { intent: "offer", durationSec: 3, technique: "motion_graphic", assetHint: "none", visual: "Offer card on a deep indigo gradient", onScreenText: "Guidance Membership from ₹299/month", motion: "pop-in", transitionOut: "cut" },
+          { intent: "cta", durationSec: 3.5, technique: "ai_image", assetHint: "none", visual: "Sunrise over calm mountains, a sense of clarity and new beginning, brand mark space", onScreenText: "Start your reading", motion: "zoom-out", transitionOut: "end" },
         ],
       },
     },
   },
   {
     slug: "lumen-serum",
-    label: "Lumen Hydrating Serum (physical product)",
+    label: "Lumen Hydrating Serum (physical product) — real asset + keyframes",
     sourceImage: "/imported-assets/417560aac4790393eb39b186.png",
     sourceRole: "product",
     body: {
@@ -69,19 +70,20 @@ const BRANDS = [
       template: "minimal",
       aspectRatio: "9:16",
       resolution: "360p",
-      durationSeconds: 9,
+      durationSeconds: 12,
+      productProfile: { brandColors: ["#0f6e5a", "#ffd166"] },
       concept: { title: "Everyday glow", centralMessage: "Hydration you can feel all day" },
       referenceAssets: [{ url: "/imported-assets/417560aac4790393eb39b186.png", role: "product", primary: true }],
       galleryUrls: ["/imported-assets/417560aac4790393eb39b186.png"],
       storyboard: {
         origin: "ai",
         logline: "A serum that keeps up with your whole day.",
-        totalDurationSec: 9,
+        totalDurationSec: 12,
         shots: [
-          { intent: "hook", durationSec: 2, technique: "motion_graphic", assetHint: "none", visual: "Soft gradient, brand word mark fades up", onScreenText: "Meet Lumen", motion: "ease-in", transitionOut: "fade" },
-          { intent: "hero", durationSec: 3.5, technique: "real_asset", assetHint: "product", visual: "Animate the real product photo, gentle push-in", onScreenText: "Hydration you can feel all day", motion: "slow push-in", transitionOut: "cut" },
-          { intent: "offer", durationSec: 2, technique: "motion_graphic", assetHint: "none", visual: "Offer card", onScreenText: "20% off this week", motion: "pop-in", transitionOut: "cut" },
-          { intent: "cta", durationSec: 1.5, technique: "motion_graphic", assetHint: "logo", visual: "End card", onScreenText: "Shop now", motion: "hold", transitionOut: "end" },
+          { intent: "hook", durationSec: 2.5, technique: "ai_image", assetHint: "none", visual: "Dewy morning light, water droplets on a leaf, fresh and clean", onScreenText: "Meet Lumen", motion: "ease-in", transitionOut: "fade" },
+          { intent: "hero", durationSec: 4, technique: "real_asset", assetHint: "product", visual: "The real product photo, gentle push-in", onScreenText: "Hydration you can feel all day", motion: "slow push-in", transitionOut: "cut" },
+          { intent: "offer", durationSec: 2.5, technique: "motion_graphic", assetHint: "none", visual: "Offer card", onScreenText: "20% off this week", motion: "pop-in", transitionOut: "cut" },
+          { intent: "cta", durationSec: 3, technique: "motion_graphic", assetHint: "logo", visual: "End card", onScreenText: "Shop now", motion: "hold", transitionOut: "end" },
         ],
       },
     },
@@ -116,6 +118,8 @@ async function main() {
       model: body.model,
       storyboardDriven: body.render?.storyboardDriven,
       storyboardOrigin: body.render?.storyboardOrigin,
+      generatedKeyframes: body.render?.generatedKeyframes,
+      quality: body.render?.quality,
       usedImages: body.render?.usedImages,
       durationSec: body.render?.durationSec,
       dimensions: `${body.render?.width}x${body.render?.height}`,
@@ -126,13 +130,15 @@ async function main() {
     const ai = (body.render?.shotReport || []).filter((s) => s.aiGenerated).length;
     const det = (body.render?.shotReport || []).filter((s) => !s.aiGenerated).length;
     process.stdout.write(
-      `  ✔ ${mp4}\n    ${buf.length} bytes · ${report.dimensions} · ${report.durationSec}s · storyboardDriven=${report.storyboardDriven} · usedImages=${report.usedImages}\n    shots: ${ai} AI-generated / ${det} deterministic · provider=${report.provider}/${report.model}\n`
+      `  ✔ ${mp4}\n    ${buf.length} bytes · ${report.dimensions} · ${report.durationSec}s · storyboardOrigin=${report.storyboardOrigin} · realImages=${report.usedImages} · keyframes=${report.generatedKeyframes}\n    shots: ${ai} AI-generated / ${det} deterministic · quality.passed=${report.quality?.passed} · visualShots=${report.quality?.visualShots}/${report.quality?.totalShots}\n`
     );
     for (const s of body.render?.shotReport || []) {
+      const kf = s.keyframeProvider ? ` · keyframe:${s.keyframeProvider}${s.keyframeMock ? "(mock)" : ""}` : "";
       process.stdout.write(
-        `      shot ${s.shot} [${s.executedMethod}${s.aiGenerated ? " · AI" : ""}${s.usedRealAsset ? " · real asset" : ""}] "${s.onScreenText}"\n`
+        `      shot ${s.shot} [${s.executedMethod}${s.aiGenerated ? " · AI" : ""}${s.usedRealAsset ? " · real asset" : ""}${kf}] "${s.onScreenText}"\n`
       );
     }
+    for (const w of report.quality?.warnings || []) process.stdout.write(`      ⚠ ${w}\n`);
   }
   await fs.writeFile(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 2));
   process.stdout.write(`\n✔ demo-output/summary.json written\n`);
