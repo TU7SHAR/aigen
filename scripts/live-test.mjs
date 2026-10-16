@@ -70,8 +70,37 @@ async function modalHealth() {
   if (res.status === 404) console.log("→ The deployed worker predates the health endpoint. Run `modal deploy modal/video_worker.py` to deploy the i2v + auth-fixed worker.");
 }
 
+async function audioTest() {
+  // ONE TTS line + ONE Lyria clip, both through a fail-closed JobBudget.
+  Object.assign(process.env, {
+    ENABLE_PAID_AUDIO_GENERATION: "true", DISABLE_PAID_GENERATION: "false",
+    JOB_MAX_PAID_AUDIO: "2", JOB_MAX_PAID_IMAGES: "0", JOB_MAX_PAID_VIDEO_CLIPS: "0",
+    JOB_MAX_USD: "0.20", DEV_SPEND_LIMIT_USD: "0.20", JOB_MAX_PAID_RETRIES: "0",
+  });
+  const { getAudioProviders } = await import("../lib/ai/audioProvider.js");
+  const { createJobBudget } = await import("../lib/costs/jobBudget.js");
+  const { voice, music, reasons } = getAudioProviders();
+  console.log(`PLAN: 1 voiceover (${voice?.model || "off"}) + 1 music clip (${music?.model || "off"}) · cap $0.20`);
+  if (!voice || !music) return console.log(`blocked: ${reasons.join("; ")}`);
+  if (!confirmed) return console.log("NOT RUN — add --confirm to execute this paid test.");
+  const budget = createJobBudget();
+  await fs.mkdir(OUT, { recursive: true });
+  const vo = await budget.run("audio", budget.config.ttsUsdPerCall, "voiceover", () =>
+    voice.generate({ text: "Tired of horoscopes written for millions? BhavishAI reads your exact birth chart." }));
+  const voFile = path.join(OUT, `audio-vo.${/mpeg|mp3/.test(vo.mimeType) ? "mp3" : "wav"}`);
+  await fs.writeFile(voFile, Buffer.from(vo.audioBase64, "base64"));
+  console.log(`✔ voiceover ${vo.mimeType} → ${voFile}`);
+  const mu = await budget.run("audio", budget.config.musicUsdPerCall, "music", () =>
+    music.generate({ prompt: "Instrumental only, no vocals. Calm, cinematic and hopeful ambient score with soft piano, warm pads and a gentle pulse, for a 15-second mobile ad about personal astrology. Clean mix." }));
+  const muFile = path.join(OUT, `audio-music.${/wav/.test(mu.mimeType) ? "wav" : "mp3"}`);
+  await fs.writeFile(muFile, Buffer.from(mu.audioBase64, "base64"));
+  console.log(`✔ music ${mu.mimeType} → ${muFile}`);
+  console.log(`  reserved spend: $${budget.summary().reservedUsd} (worst-case basis)`);
+}
+
 async function main() {
   if (mode === "modal-health") return modalHealth();
+  if (mode === "audio") return audioTest();
   const plan = PLANS[mode];
   if (!plan) {
     console.log("usage: node scripts/live-test.mjs <modal-health|veo-clip|modal-clip|image> [--confirm]");

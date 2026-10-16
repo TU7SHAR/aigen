@@ -101,6 +101,26 @@ concepts). See `docs/CRAWLER.md` and `docs/CREATIVE.md`.
 `public/imported-assets/` (prototype only). This is **not durable on ephemeral
 serverless disk**; the `SupabaseAssetStore` stub marks the production path.
 
+## 3c. Ad production engine (`screen_demo`, implemented)
+
+`lib/render/compositor.js` executes the Creative Director's storyboard shot by
+shot, then `lib/render/screenRenderer.js` finishes the MP4:
+
+| Shot technique | Execution |
+|---|---|
+| `ai_video` | Video model via `getSceneVideoProvider` (Veo / Modal). First frame = the real product photo only when the Director points the shot at it (fidelity-preserving motion prompt); otherwise text-to-video. Baked letterbox bars are cropped; native ambient audio is kept. |
+| `real_asset` (tall website/app capture) | Eased scroll inside a device card on the brand backdrop (real screen footage) |
+| `real_asset` / `composite` (photo) | Photo over a blurred fill of itself + Ken Burns |
+| closing `motion_graphic` | Last frame of the previous shot, blurred + brand-tinted, with brand title, CTA pill and URL |
+
+Audio (`lib/ai/audioProvider.js`): one Gemini TTS voiceover of the shots' VO
+lines + one Lyria instrumental bed, mixed with the footage's ambient stems
+(music ducked under the voice, −14 LUFS). Every paid call runs through the
+per-job `JobBudget`; anything missing or failed is listed in
+`render.quality.warnings` and per shot in `render.shotReport`.
+`scripts/make-ad.mjs <url>` runs import → concepts → storyboard (and, with
+`--confirm`, production) from the CLI; `--plan <file>` produces a reviewed plan.
+
 ## 4. Planned production direction (NOT implemented)
 
 - Auth + tenant scoping; Supabase Postgres with RLS; private object storage.

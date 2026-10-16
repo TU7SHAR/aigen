@@ -33,7 +33,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 // assets + exact copy (no paid model). "generative" is gated behind the paid
 // kill-switch (returns a reviewable dry-run plan while paid gen is disabled).
 const FORMATS = [
-  { id: "screen_demo", label: "Screen demo / explainer", hint: "Animate your real screenshots — no AI video cost", kind: "deterministic" },
+  { id: "screen_demo", label: "AI video ad (storyboard)", hint: "Real product/site footage + AI video shots, voiceover and music — paid shots run only when enabled and within the per-job cap", kind: "deterministic" },
   { id: "cinematic_card", label: "Narrated brand card", hint: "Branded title-card ad from your assets — no AI video cost", kind: "deterministic" },
   { id: "generative", label: "Generative cinematic", hint: "AI-generated footage (paid; dry-run while disabled)", kind: "generative" },
 ];
@@ -64,7 +64,7 @@ export default function Studio() {
     template: "luxury",
     aspectRatio: "9:16",
     resolution: "720p",
-    durationSeconds: 8,
+    durationSeconds: 14,
     // Production format. Default = deterministic screen-based render (real
     // assets + exact text, NO paid model). "generative" is gated/dry-run.
     format: "screen_demo",
