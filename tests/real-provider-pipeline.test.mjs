@@ -64,14 +64,25 @@ test("scene video stays OFF unless every gate is open (kill-switch default)", as
   });
 });
 
-test("modal scene video never silently falls back to Gemini", async () => {
+test("modal scene video: no fallback when auto-switch is off; visible fallback when on", async () => {
   await withEnv({
     VIDEO_PROVIDER: "gemini", ENABLE_PAID_GENERATION: "true", DISABLE_PAID_GENERATION: "false",
-    JOB_MAX_PAID_VIDEO_CLIPS: "1", VIDEO_MODEL: "modal-video", MODAL_VIDEO_ENDPOINT: undefined,
+    JOB_MAX_PAID_VIDEO_CLIPS: "1", VIDEO_MODEL: "modal-video", VIDEO_MODEL_CHAIN: undefined, MODAL_VIDEO_ENDPOINT: undefined,
+    VIDEO_AUTO_SWITCH: "false",
   }, async () => {
     const sv = await getSceneVideoProvider({ durationSeconds: 3 });
     assert.equal(sv.provider, null);
     assert.match(sv.reason, /MODAL_VIDEO_ENDPOINT/);
+  });
+  await withEnv({
+    VIDEO_PROVIDER: "gemini", ENABLE_PAID_GENERATION: "true", DISABLE_PAID_GENERATION: "false",
+    JOB_MAX_PAID_VIDEO_CLIPS: "1", VIDEO_MODEL: "modal-video", VIDEO_MODEL_CHAIN: undefined, MODAL_VIDEO_ENDPOINT: undefined,
+    VIDEO_AUTO_SWITCH: undefined,
+  }, async () => {
+    const sv = await getSceneVideoProvider({ durationSeconds: 3 });
+    assert.ok(sv.provider);
+    assert.equal(sv.autoSwitch, true);
+    assert.ok(!sv.chain.includes("modal-video"), "unconfigured modal is not routable");
   });
 });
 

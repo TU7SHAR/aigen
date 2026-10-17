@@ -1,15 +1,12 @@
 /**
- * POST /api/creative/preview — compile the creative plan WITHOUT generating.
- *
- * Returns exactly what /api/generate would use (same compileCreativeRequest),
- * so the UI's prompt preview and storyboard reflect the real server prompt.
- * NO paid video generation here.
+ * POST /api/creative/preview — the exact plan, preflight and production
+ * estimate that "Create video" would use (same prepareGeneration), with no
+ * paid call.
  */
 
 import { NextResponse } from "next/server";
-import { generateRequestSchema } from "@/lib/validation.js";
-import { compileCreativeRequest } from "@/lib/creative/compile.js";
-import { estimateCost } from "@/lib/costs/estimate.js";
+import { prepareGeneration } from "@/lib/api/generateCore.js";
+import { estimateProduction } from "@/lib/costs/productionEstimate.js";
 
 export async function POST(request) {
   let body;
@@ -18,24 +15,9 @@ export async function POST(request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  // Reuse the generate schema but tolerate a missing clientRequestId etc.
-  const parsed = generateRequestSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: "Validation failed.",
-        details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
-      },
-      { status: 422 }
-    );
-  }
-  const input = parsed.data;
-  const compiled = compileCreativeRequest(input);
-  const estimatedCost = estimateCost({
-    durationSeconds: input.durationSeconds,
-    resolution: input.resolution,
-  });
-
+  const prepared = await prepareGeneration(body);
+  if (!prepared.ok) return NextResponse.json(prepared.body, { status: prepared.status });
+  const { compiled, input, est, creativePayload } = prepared;
   return NextResponse.json({
     ok: true,
     entityType: compiled.entityType,
@@ -43,12 +25,13 @@ export async function POST(request) {
     generationMode: compiled.generationMode,
     creativeBrief: compiled.brief,
     scenePlan: compiled.scenePlan,
-    generationContext: compiled.generationContext,
-    generationContextChars: compiled.generationContextChars,
     finalVideoPrompt: compiled.finalVideoPrompt,
     negativeRules: compiled.negativeRules,
     sourceImage: compiled.sourceImage,
     preflight: compiled.preflight,
-    estimatedCost,
+    language: creativePayload.language,
+    destination: creativePayload.destination,
+    estimatedCost: est,
+    production: estimateProduction(compiled.scenePlan, input),
   });
 }

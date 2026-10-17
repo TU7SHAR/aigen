@@ -19,19 +19,26 @@ test("default model is a GA (non-deprecated) model", () => {
   assert.notEqual(info.status, "deprecated");
 });
 
-test("Veo 3.1 Lite is present, routed to the veo adapter, NOT recommended, with shutdown date", () => {
+test("Veo 3.1 Lite maps to its OWN api id (regression: it used to call Veo 3.1 Fast) and has no announced shutdown", () => {
   const veo = VIDEO_MODELS["veo-3.1-lite"];
   assert.ok(veo);
   assert.equal(veo.providerImpl, "veo");
-  assert.equal(veo.recommended, false);
-  assert.equal(veo.shutdownDate, "2026-10-22");
+  assert.equal(veo.apiModelId, "veo-3.1-lite-generate-preview");
+  assert.equal(veo.shutdownDate, null); // docs/deprecations, checked 2026-10-17
+  assert.equal(veo.usdPerSecond720p, 0.05);
 });
 
-test("Omni is the recommended default and supports image-to-video", () => {
+test("Omni is GA and supports image-to-video; it is in the default chain after the cheaper Veo models", async () => {
   const omni = VIDEO_MODELS["gemini-omni-1.1-flash"];
-  assert.equal(omni.recommended, true);
   assert.equal(omni.supportsImageToVideo, true);
   assert.equal(omni.status, "ga");
+  const { DEFAULT_CHAINS } = await import("../lib/ai/modelRegistry.js");
+  assert.deepEqual(DEFAULT_CHAINS.video.slice(0, 3), ["veo-3.1-lite", "veo-3.1-fast", "gemini-omni-1.1-flash"]);
+});
+
+test("shut-down Veo 3.0 models are not in the registry", () => {
+  assert.equal(VIDEO_MODELS["veo-3.0-fast"], undefined);
+  assert.equal(VIDEO_MODELS["veo-3.0-generate-001"], undefined);
 });
 
 test("unknown model id falls back to a usable gemini-omni record", () => {
@@ -40,15 +47,18 @@ test("unknown model id falls back to a usable gemini-omni record", () => {
   assert.ok(info.usdPerSecond720p >= 0);
 });
 
-test("deprecationWarning fires only for a deprecated default", () => {
-  // default (Omni) → no warning
-  assert.equal(deprecationWarning(), null);
+test("deprecationWarning fires only when the head model is deprecated or has a shutdown date", () => {
   const prev = process.env.VIDEO_MODEL;
-  // Veo Lite is preview with a shutdown date → a heads-up warning (not a block).
-  process.env.VIDEO_MODEL = "veo-3.1-lite";
-  assert.match(deprecationWarning() || "", /shutdown/i);
+  const prevChain = process.env.VIDEO_MODEL_CHAIN;
+  delete process.env.VIDEO_MODEL_CHAIN;
+  delete process.env.VIDEO_MODEL;
+  assert.equal(deprecationWarning(), null); // veo-3.1-lite head: no shutdown announced
+  process.env.VIDEO_MODEL_CHAIN = "gemini-3.1-flash-lite"; // deprecated (text model used as a probe)
+  assert.match(deprecationWarning() || "", /deprecated/i);
   if (prev === undefined) delete process.env.VIDEO_MODEL;
   else process.env.VIDEO_MODEL = prev;
+  if (prevChain === undefined) delete process.env.VIDEO_MODEL_CHAIN;
+  else process.env.VIDEO_MODEL_CHAIN = prevChain;
 });
 
 test("cost estimate reflects the registry rate when no env override", () => {

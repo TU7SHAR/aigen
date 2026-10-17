@@ -1,33 +1,20 @@
 /**
- * POST /api/generate — create a product video ad.
- *
- * Thin transport wrapper. The real pipeline (validation, reference resolution,
- * canonical compile, preflight gate, provider dispatch, spend accounting) lives
- * in `lib/api/generateCore.js` so it can be integration-tested without Next's
- * module resolution. This file only parses the request and serializes the
- * result with NextResponse.
- *
- * The Gemini Omni Interactions API is synchronous, so we return the video
- * inline. maxDuration is raised accordingly; on serverless hosts this must stay
- * within the plan's execution limit (documented in docs/ARCHITECTURE.md).
+ * /api/generate
+ *   POST — legacy synchronous one-shot generation (CLI/tests). The Studio uses
+ *          the durable job path (POST /api/jobs) instead.
+ *   GET  — capability/status probe for the UI: routing chains with live quota,
+ *          paid gates, durable spend. No secrets.
  */
 
 import { NextResponse, connection } from "next/server";
 import { runGenerate } from "@/lib/api/generateCore.js";
 import { getProviderStatus } from "@/lib/ai/providerStatus.js";
-import { getModelInfo, deprecationWarning } from "@/lib/ai/modelRegistry.js";
-import {
-  isPaidGenerationEnabled,
-  getProviderName,
-  getDevSpendLimitUsd,
-} from "@/lib/config.js";
+import { getModelInfo, deprecationWarning, getDefaultModelId } from "@/lib/ai/modelRegistry.js";
+import { isPaidGenerationEnabled, getProviderName, getDailySpendLimitUsd } from "@/lib/config.js";
 import { RESOLUTION_MULTIPLIER } from "@/lib/costs/estimate.js";
 
-// NOTE: This build enables `cacheComponents`, which disallows the `runtime`
-// and `dynamic` route segment configs. POST handlers are dynamic by default,
-// so no config is needed. `maxDuration` raises the execution limit to allow
-// the synchronous Gemini Omni call to complete; keep it within your host's
-// plan limit when deploying.
+// cacheComponents disallows `runtime`/`dynamic` segment configs; POST is
+// dynamic by default. Keep maxDuration within the host's limit.
 export const maxDuration = 300;
 
 export async function POST(request) {
@@ -42,23 +29,15 @@ export async function POST(request) {
 }
 
 export async function GET() {
-  // Lightweight capability/status probe for the UI. Must run per request (it
-  // reads env + the spend ledger), so opt out of prerendering.
   await connection();
-  const model = getModelInfo();
+  const model = getModelInfo(getDefaultModelId());
   return NextResponse.json({
     providers: await getProviderStatus(),
     provider: getProviderName(),
     paidGenerationEnabled: isPaidGenerationEnabled(),
-    devSpendLimitUsd: getDevSpendLimitUsd(),
-    model: {
-      id: model.id,
-      label: model.label,
-      status: model.status,
-      usdPerSecond720p: model.usdPerSecond720p,
-    },
-    // Resolution multipliers so the UI estimate matches the server exactly
-    // (single source of truth; no duplicated numbers in the client).
+    dailySpendLimitUsd: getDailySpendLimitUsd(),
+    devSpendLimitUsd: getDailySpendLimitUsd(),
+    model: { id: model.id, label: model.label, status: model.status, usdPerSecond720p: model.usdPerSecond720p },
     resolutionMultipliers: RESOLUTION_MULTIPLIER,
     modelWarning: deprecationWarning(),
   });

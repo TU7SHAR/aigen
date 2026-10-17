@@ -1,128 +1,95 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Upload,
-  Loader2,
-  Download,
-  AlertCircle,
-  ImageIcon,
-  Info,
-  Link2,
-  ArrowRight,
-} from "lucide-react";
-import ProductImport from "./ProductImport.js";
+/**
+ * MakeAdClips Studio — the customer journey.
+ *
+ *   1. Source     paste a URL (import + focus + concept review) or upload & describe
+ *   2. Direction  video language, length/format, CTA + destination; the AI
+ *                 creative plan (read-only: approve or regenerate)
+ *   3. Create     honest availability, estimate and preflight → background job
+ *   4. Production truthful stage/shot progress (leave and come back)
+ *   5. Result     preview, download, checks, provenance; make another version
+ *
+ * Drafts and the active job are remembered on THIS device (localStorage);
+ * finished videos live on the server (GET /api/jobs).
+ */
 
-const TEMPLATES = [
-  { id: "luxury", label: "Luxury Studio", hint: "Premium, cinematic" },
-  { id: "bold", label: "Bold Performance", hint: "High energy" },
-  { id: "minimal", label: "Minimal Hero", hint: "Modern, neutral" },
-  { id: "product-demo", label: "Product Demo", hint: "Show features" },
-  { id: "problem-solution", label: "Problem → Solution", hint: "Narrative" },
-  { id: "lifestyle", label: "Lifestyle", hint: "Natural setting" },
-];
-const RATIOS = [
-  { id: "9:16", label: "9:16 Portrait" },
-  { id: "16:9", label: "16:9 Landscape" },
-];
-const RESOLUTIONS = ["360p", "720p", "1080p"];
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Upload, Loader2, AlertCircle, Link2, ArrowRight, ArrowLeft, RefreshCw, Sparkles, ShieldCheck } from "lucide-react";
+import ProductImport from "./ProductImport.js";
+import LanguagePicker from "./LanguagePicker.js";
+import JobTracker from "./JobTracker.js";
+import ResultPanel from "./ResultPanel.js";
+import RecentJobs from "./RecentJobs.js";
+import { useStoredState, writeStored } from "./useStoredState.js";
+
 const ALLOWED_MIME = ["image/png", "image/jpeg", "image/webp"];
 const MAX_BYTES = 5 * 1024 * 1024;
-
-// Production formats. Deterministic ones render a finished MP4 from your real
-// assets + exact copy (no paid model). "generative" is gated behind the paid
-// kill-switch (returns a reviewable dry-run plan while paid gen is disabled).
-const FORMATS = [
-  { id: "screen_demo", label: "AI video ad (storyboard)", hint: "Real product/site footage + AI video shots, voiceover and music — paid shots run only when enabled and within the per-job cap", kind: "deterministic" },
-  { id: "cinematic_card", label: "Narrated brand card", hint: "Branded title-card ad from your assets — no AI video cost", kind: "deterministic" },
-  { id: "generative", label: "Generative cinematic", hint: "AI-generated footage (paid; dry-run while disabled)", kind: "generative" },
-];
+const DEFAULT_LANGUAGE = { mode: "single", primary: "en-US", secondary: [], captionScript: "Latn" };
+const DEFAULT_SETTINGS = { durationSeconds: 12, aspectRatio: "9:16", resolution: "1080p", narration: true };
+const STEPS = ["Source", "Direction", "Create", "Production", "Result"];
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const result = String(reader.result);
-      const comma = result.indexOf(",");
-      resolve(result.slice(comma + 1)); // strip data: prefix
+      resolve(result.slice(result.indexOf(",") + 1));
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
 
+function Stepper({ step }) {
+  const idx = STEPS.indexOf(step);
+  return (
+    <ol className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-1" aria-label="Progress">
+      {STEPS.map((s, i) => (
+        <li key={s} className="flex items-center gap-2 text-sm" aria-current={i === idx ? "step" : undefined}>
+          <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs ${i < idx ? "border-accent bg-accent text-accent-contrast" : i === idx ? "border-accent text-ink" : "border-line text-muted"}`}>{i + 1}</span>
+          <span className={i === idx ? "font-medium text-ink" : "text-muted"}>{s}</span>
+          {i < STEPS.length - 1 && <span className="text-line" aria-hidden="true">—</span>}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export default function Studio() {
-  const [status, setStatus] = useState(null); // provider/paid info
-  const [image, setImage] = useState(null); // { previewUrl, base64, mimeType, name }
-  const [dragOver, setDragOver] = useState(false);
-  const [form, setForm] = useState({
-    productName: "",
-    brand: "",
-    description: "",
-    offer: "",
-    cta: "",
-    template: "luxury",
-    aspectRatio: "9:16",
-    resolution: "720p",
-    durationSeconds: 14,
-    // Production format. Default = deterministic screen-based render (real
-    // assets + exact text, NO paid model). "generative" is gated/dry-run.
-    format: "screen_demo",
-  });
-  // When the user hand-edits the prompt we store it here; otherwise the prompt
-  // is derived from the form via useMemo (no setState-in-effect).
-  const [promptEdit, setPromptEdit] = useState(null);
-  const [phase, setPhase] = useState("idle"); // idle | processing | completed | failed
+  const [status, setStatus] = useState(null);
+  const [mode, setMode] = useState("url"); // url | manual
+  const [step, setStep] = useState("Source");
+  const [imported, setImported] = useState(null);
+  const [form, setForm] = useState({ productName: "", brand: "", description: "", offer: "", cta: "", destinationUrl: "" });
+  const [image, setImage] = useState(null);
+  const [language, setLanguage] = useStoredState("mac.language", DEFAULT_LANGUAGE);
+  const [settings, setSettings] = useStoredState("mac.settings", DEFAULT_SETTINGS);
+  const [activeJob, setActiveJob] = useStoredState("mac.activeJob", null);
+  const [storyboard, setStoryboard] = useState(null);
+  const [storyboardState, setStoryboardState] = useState({ loading: false, error: "" });
+  const [preview, setPreview] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState(null);
-  const fileInputRef = useRef(null);
-  const inFlight = useRef(false);
+  const [finished, setFinished] = useState(null); // { job, record }
+  const [jobsRefresh, setJobsRefresh] = useState(0);
+  const fileRef = useRef(null);
 
-  // Create-from mode: "url" (import) or "manual" (upload). Imported context is
-  // carried into generation so the creative pipeline can use the brand.
-  const [mode, setMode] = useState("url");
-  const [imported, setImported] = useState(null); // { productProfile, brandProfile, brandInfluence }
-  const [importedImages, setImportedImages] = useState([]); // hero + gallery urls
+  // Re-read on submit/finish too: the bar shows today's spend and clips left,
+  // which a finished job changes.
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/generate", { cache: "no-store" }).then((r) => r.json()).then((d) => { if (alive) setStatus(d); }).catch(() => {});
+    return () => { alive = false; };
+  }, [jobsRefresh]);
 
-  // AI Creative Director storyboard for the chosen concept. Generated from the
-  // imported concept + brand evidence (cheap TEXT model; no video cost). It is
-  // the executable, per-shot plan that drives production — NOT user-editable
-  // (read-only review per product vision). `origin` is "ai" or "fallback".
-  const [storyboard, setStoryboard] = useState(null); // { logline, shots, origin, note? }
-  const [storyboardLoading, setStoryboardLoading] = useState(false);
+  const currentStep = activeJob ? (finished ? "Result" : "Production") : step;
 
   const handleImported = useCallback((payload) => {
-    setStoryboard(null); // new source → regenerate the storyboard from scratch
-    setImported({
-      productProfile: payload.productProfile,
-      brandProfile: payload.brandProfile,
-      brandInfluence: payload.brandInfluence,
-      entityType: payload.entityType,
-      designProfile: payload.designProfile || null,
-      entityConfidence: payload.entityConfidence,
-      concept: payload.concept,
-      // The chosen hero image becomes the server-resolved generation reference
-      // (fixes the bug where a crawler-found image never reached the model).
-      referenceAssetUrl: payload.heroUrl || null,
-      // Product PR A: all user-selected URL references (multi-image), plus the
-      // user's emphasis/avoid/context corrections.
-      referenceAssets: payload.referenceAssets || [],
-      emphasis: payload.emphasis || [],
-      avoid: payload.avoid || [],
-      userContext: payload.userContext || undefined,
-    });
-    setImportedImages(
-      [payload.heroUrl, ...(payload.referenceAssets || []).map((a) => a.url)].filter(Boolean)
-    );
-    // Product PR A: if the user's primary reference is an UPLOAD, seed it as the
-    // single base64 generation image (uploads can't be fetched by URL).
+    setStoryboard(null);
+    setImported(payload);
     if (payload.uploadImage?.data) {
-      setImage({
-        previewUrl: `data:${payload.uploadImage.mimeType};base64,${payload.uploadImage.data}`,
-        base64: payload.uploadImage.data,
-        mimeType: payload.uploadImage.mimeType,
-        name: "uploaded-reference",
-      });
+      setImage({ previewUrl: `data:${payload.uploadImage.mimeType};base64,${payload.uploadImage.data}`, base64: payload.uploadImage.data, mimeType: payload.uploadImage.mimeType, name: "uploaded-reference" });
     }
     setForm((f) => ({
       ...f,
@@ -130,895 +97,373 @@ export default function Studio() {
       brand: payload.form.brand || f.brand,
       description: payload.form.description || f.description,
       offer: payload.form.offer || f.offer,
-      template: payload.form.template || f.template,
+      destinationUrl: payload.productProfile?.canonicalUrl || payload.productProfile?.sourceUrl || f.destinationUrl,
     }));
-    setMode("manual"); // reveal the full editor, prefilled
+    setStep("Direction");
   }, []);
 
-  // Fetch provider/paid status for honest UI messaging.
-  useEffect(() => {
-    fetch("/api/generate")
-      .then((r) => r.json())
-      .then(setStatus)
-      .catch(() => {});
-  }, []);
+  const concept = useMemo(() => {
+    if (imported?.concept) return imported.concept;
+    if (!form.productName.trim()) return null;
+    return { id: "manual", title: form.productName, centralMessage: form.description || form.productName };
+  }, [imported, form.productName, form.description]);
 
-  // SINGLE SOURCE OF TRUTH: the displayed prompt is the SERVER's compiled prompt
-  // from /api/creative/preview — not a client approximation. Debounced so edits
-  // to any creative field refresh it. No paid call (preview compiles only).
-  const [serverPreview, setServerPreview] = useState(null); // { finalVideoPrompt, preflight, entityType, generationMode, creativeBrief, scenePlan }
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const referenceAssets = useMemo(() => (imported?.referenceAssets?.length ? imported.referenceAssets : []), [imported]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const hasName = form.productName.trim().length > 0;
-    const t = setTimeout(async () => {
-      if (!hasName) {
-        if (!cancelled) setServerPreview(null);
-        return;
-      }
-      if (!cancelled) setPreviewLoading(true);
-      try {
-        const res = await fetch("/api/creative/preview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...form,
-            durationSeconds: Number(form.durationSeconds),
-            image: image ? { data: image.base64, mimeType: image.mimeType } : undefined,
-            productProfile: imported?.productProfile || undefined,
-            brandProfile: imported?.brandProfile || undefined,
-            brandInfluence: imported?.brandInfluence || "balanced",
-            entityType: imported?.entityType || undefined,
-            designProfile: imported?.designProfile || undefined,
-            entityConfidence: imported?.entityConfidence,
-            concept: imported?.concept || undefined,
-            // AI Creative Director storyboard drives the scene plan + per-shot
-            // production when present (so the preview matches what will render).
-            storyboard: storyboard || undefined,
-            category: imported?.productProfile?.category || undefined,
-            offering: imported?.productProfile?.offering || undefined,
-            userIntent: imported?.userContext || undefined,
-            emphasis: imported?.emphasis?.length ? imported.emphasis : undefined,
-            avoid: imported?.avoid?.length ? imported.avoid : undefined,
-            referenceAssets: imported?.referenceAssets?.length ? imported.referenceAssets : undefined,
-            sourceImageMeta: image ? { hintText: image.name, url: image.name } : undefined,
-          }),
-        });
-        const data = await res.json();
-        if (!cancelled && res.ok) setServerPreview(data);
-      } catch {
-        /* preview is best-effort; generation still validates server-side */
-      } finally {
-        if (!cancelled) setPreviewLoading(false);
-      }
-    }, 500);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [form, image, imported, storyboard]);
-
-  // AI CREATIVE DIRECTOR: once a concept + offering exist, ask the Director for
-  // an executable storyboard. Debounced; cheap TEXT model (no video cost). The
-  // result is read-only (approve or regenerate), per product vision — not an
-  // editable timeline. Degrades to a labeled deterministic storyboard with no key.
+  // ---- AI creative plan (read-only; approve or regenerate) ----
   const buildStoryboard = useCallback(async () => {
-    const concept = imported?.concept;
-    const name = form.productName.trim() || imported?.productProfile?.name;
-    if (!concept || !name) {
-      setStoryboard(null);
-      return;
-    }
-    setStoryboardLoading(true);
+    if (!concept) return;
+    setStoryboardState({ loading: true, error: "" });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 180_000);
     try {
-      const availableAssets = (imported?.referenceAssets?.length
-        ? imported.referenceAssets
-        : importedImages.map((u) => ({ url: u }))
-      ).map((a) => ({ role: a.role || "image", kind: "image" }));
       const res = await fetch("/api/creative/storyboard", {
         method: "POST",
+        signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           concept,
           product: {
-            name,
+            name: form.productName || imported?.productProfile?.name,
             brand: form.brand || imported?.brandProfile?.name,
             description: form.description || imported?.productProfile?.description,
             offer: form.offer || undefined,
             cta: form.cta || undefined,
+            price: imported?.productProfile?.price || undefined,
+            currency: imported?.productProfile?.currency || undefined,
             category: imported?.productProfile?.category,
             offering: imported?.productProfile?.offering,
             targetCustomer: imported?.productProfile?.targetCustomer,
+            benefits: imported?.productProfile?.benefits,
+            features: imported?.productProfile?.features,
+            destination: form.destinationUrl || undefined,
           },
           brand: imported?.brandProfile || null,
           design: imported?.designProfile || null,
           entityType: imported?.entityType,
-          durationSeconds: Number(form.durationSeconds),
-          aspectRatio: form.aspectRatio,
-          availableAssets,
+          durationSeconds: Number(settings.durationSeconds),
+          aspectRatio: settings.aspectRatio,
+          availableAssets: (referenceAssets.length ? referenceAssets : image ? [{ role: "user_upload" }] : []).map((a) => ({ role: a.role || "image", kind: "image" })),
           emphasis: imported?.emphasis?.length ? imported.emphasis : undefined,
           avoid: imported?.avoid?.length ? imported.avoid : undefined,
+          focus: imported?.focus || undefined,
+          language,
         }),
       });
       const data = await res.json();
-      if (res.ok && data?.storyboard?.shots?.length) {
-        setStoryboard({ ...data.storyboard, origin: data.origin, note: data.note });
-      } else {
-        setStoryboard(null);
-      }
-    } catch {
-      setStoryboard(null);
-    } finally {
-      setStoryboardLoading(false);
-    }
-  }, [imported, form.productName, form.brand, form.description, form.offer, form.cta, form.durationSeconds, form.aspectRatio, importedImages]);
-
-  // Regenerate the storyboard when the concept arrives or key creative fields
-  // change (debounced). Only runs once a concept is present.
-  useEffect(() => {
-    if (!imported?.concept) return;
-    const t = setTimeout(() => { buildStoryboard(); }, 600);
-    return () => clearTimeout(t);
-  }, [imported?.concept, buildStoryboard]);
-
-  const editingPrompt = promptEdit !== null;
-  const promptPreview = editingPrompt
-    ? promptEdit
-    : serverPreview?.finalVideoPrompt || "";
-
-  // Entity-aware field labels: SaaS/service/creator users shouldn't see
-  // "Product name / Product image" as if they sell a physical item.
-  const entity = imported?.entityType || serverPreview?.entityType || "";
-  const isPhysical = /physical_product|ecommerce/.test(entity);
-  const labels = isPhysical
-    ? { name: "Product name *", image: "Product image" }
-    : entity.includes("creator") || entity.includes("personal_brand")
-      ? { name: "Creator / brand name *", image: "Profile / brand visual" }
-      : entity
-        ? { name: "Name *", image: "Primary visual" }
-        : { name: "Product / brand name *", image: "Primary visual" };
-
-  const onPickFile = useCallback(async (file) => {
-    setError("");
-    if (!file) return;
-    if (!ALLOWED_MIME.includes(file.type)) {
-      setError("Unsupported image type. Use PNG, JPEG or WEBP.");
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      setError("Image is larger than 5 MB.");
-      return;
-    }
-    const base64 = await fileToBase64(file);
-    setImage({
-      previewUrl: URL.createObjectURL(file),
-      base64,
-      mimeType: file.type,
-      name: file.name,
-    });
-  }, []);
-
-  const update = (k) => (e) =>
-    setForm((f) => ({ ...f, [k]: e?.target ? e.target.value : e }));
-
-  const estCostLabel = useMemo(() => {
-    // Use the ACTIVE model's per-second rate from the server status probe
-    // (reads VIDEO_MODEL at request time) — not a hardcoded Omni rate. Falls
-    // back to 0.10 only until the probe resolves. Same resolution multipliers
-    // as the server's estimateCost().
-    const rate = status?.model?.usdPerSecond720p ?? 0.1;
-    const mult =
-      (status?.resolutionMultipliers || { "360p": 0.5, "720p": 1, "1080p": 1.6 })[
-        form.resolution
-      ] ?? 1;
-    const usd = (rate * form.durationSeconds * mult).toFixed(2);
-    return `~$${usd}`;
-  }, [status, form.resolution, form.durationSeconds]);
-
-  async function generate() {
-    if (inFlight.current) return;
-    if (!form.productName.trim()) {
-      setError("Please enter a product name.");
-      return;
-    }
-    inFlight.current = true;
-    setPhase("processing");
-    setError("");
-    setResult(null);
-
-    const payload = {
-      ...form,
-      durationSeconds: Number(form.durationSeconds),
-      image: image ? { data: image.base64, mimeType: image.mimeType } : undefined,
-      promptOverride: editingPrompt ? promptPreview : undefined,
-      clientRequestId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      // Carry imported product/brand context into the creative pipeline.
-      productProfile: imported?.productProfile || undefined,
-      brandProfile: imported?.brandProfile || undefined,
-      brandInfluence: imported?.brandInfluence || "balanced",
-      entityType: imported?.entityType || undefined,
-      designProfile: imported?.designProfile || undefined,
-      entityConfidence: imported?.entityConfidence,
-      concept: imported?.concept || undefined,
-      // AI Creative Director storyboard: executable per-shot plan that drives
-      // scene planning + per-shot production routing in the compositor.
-      storyboard: storyboard || undefined,
-      category: imported?.productProfile?.category || undefined,
-      offering: imported?.productProfile?.offering || undefined,
-      userIntent: imported?.userContext || undefined,
-      emphasis: imported?.emphasis?.length ? imported.emphasis : undefined,
-      avoid: imported?.avoid?.length ? imported.avoid : undefined,
-      // Multi-image: all user-selected URL references (resolved server-side).
-      // The primary flows to the hero image; the rest are recorded context.
-      referenceAssets:
-        !image && imported?.referenceAssets?.length ? imported.referenceAssets : undefined,
-      // All selected real screenshots the screen-based renderer may animate.
-      galleryUrls: imported?.referenceAssets?.length
-        ? imported.referenceAssets.map((a) => a.url)
-        : undefined,
-      // Back-compat single reference when no multi-selection is present.
-      referenceAssetUrl:
-        !image && !imported?.referenceAssets?.length && imported?.referenceAssetUrl
-          ? imported.referenceAssetUrl
-          : undefined,
-      // Hint the source-image classifier (e.g. imported poster/ad vs packshot).
-      sourceImageMeta: image
-        ? { hintText: image.name, url: image.name }
-        : undefined,
-    };
-    const downloadName = `makeadclips-${Date.now()}.mp4`;
-
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setPhase("failed");
-        setError(
-          data?.error +
-            (data?.details
-              ? ` (${data.details.map((d) => d.message).join("; ")})`
-              : "")
-        );
+      if (!res.ok || !data?.storyboard?.shots?.length) {
+        setStoryboardState({ loading: false, error: data?.error || "Could not plan the ad. Try again." });
         return;
       }
-      setResult({ ...data, downloadName });
-      setPhase("completed");
+      setStoryboard({ ...data.storyboard, origin: data.origin, note: data.note });
+      setStoryboardState({ loading: false, error: "" });
     } catch (e) {
-      setPhase("failed");
+      setStoryboardState({ loading: false, error: e?.name === "AbortError" ? "Planning took too long and was stopped — nothing was charged. Try again." : `Planning failed: ${e.message}` });
+    } finally {
+      clearTimeout(timer);
+    }
+  }, [concept, form, imported, settings.durationSeconds, settings.aspectRatio, referenceAssets, image, language]);
+
+  // The request "Create video" will send (also used for the server preview).
+  const payload = useMemo(() => ({
+    productName: form.productName.trim(),
+    brand: form.brand,
+    description: form.description,
+    offer: form.offer,
+    cta: form.cta,
+    destinationUrl: form.destinationUrl || undefined,
+    aspectRatio: settings.aspectRatio,
+    resolution: settings.resolution,
+    durationSeconds: Number(settings.durationSeconds),
+    narration: settings.narration !== false,
+    language,
+    format: "screen_demo",
+    image: image ? { data: image.base64, mimeType: image.mimeType } : undefined,
+    productProfile: imported?.productProfile || undefined,
+    brandProfile: imported?.brandProfile || undefined,
+    brandInfluence: imported?.brandInfluence || "balanced",
+    entityType: imported?.entityType || undefined,
+    designProfile: imported?.designProfile || undefined,
+    entityConfidence: imported?.entityConfidence,
+    concept: concept || undefined,
+    storyboard: storyboard || undefined,
+    focus: imported?.focus || undefined,
+    category: imported?.productProfile?.category || undefined,
+    offering: imported?.productProfile?.offering || undefined,
+    userIntent: imported?.userContext || undefined,
+    emphasis: imported?.emphasis?.length ? imported.emphasis : undefined,
+    avoid: imported?.avoid?.length ? imported.avoid : undefined,
+    referenceAssets: !image && referenceAssets.length ? referenceAssets : undefined,
+    galleryUrls: referenceAssets.length ? referenceAssets.map((a) => a.url) : undefined,
+  }), [form, settings, language, image, imported, concept, storyboard, referenceAssets]);
+
+  // Server preview of exactly what will run (preflight + estimate). Debounced.
+  useEffect(() => {
+    if (!storyboard || !payload.productName) return undefined;
+    let alive = true;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/creative/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (alive) setPreview(res.ok ? data : { error: data?.error, details: data?.details });
+      } catch { /* preview is advisory; the server validates again on create */ }
+    }, 400);
+    return () => { alive = false; clearTimeout(t); };
+  }, [payload, storyboard]);
+
+  async function onPickFile(file) {
+    setError("");
+    if (!file) return;
+    if (!ALLOWED_MIME.includes(file.type)) return setError("Unsupported image type. Use PNG, JPEG or WEBP.");
+    if (file.size > MAX_BYTES) return setError("Image is larger than 5 MB.");
+    const base64 = await fileToBase64(file);
+    setImage({ previewUrl: URL.createObjectURL(file), base64, mimeType: file.type, name: file.name });
+  }
+
+  async function createVideo() {
+    if (submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // When MAC_API_TOKEN is configured, the browser must echo it back.
+          // Set NEXT_PUBLIC_MAC_API_TOKEN to the same value as MAC_API_TOKEN.
+          ...(process.env.NEXT_PUBLIC_MAC_API_TOKEN ? { "x-mac-token": process.env.NEXT_PUBLIC_MAC_API_TOKEN } : {}),
+        },
+        // One id per click-through: double clicks and retries reuse the same job.
+        body: JSON.stringify({ ...payload, clientRequestId: `${(storyboard?.logline || "plan").slice(0, 40)}:${globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}` }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.jobId) {
+        const reasons = data?.preflight?.blockers?.join(" ") || data?.details?.map((d) => `${d.path}: ${d.message}`).join("; ") || "";
+        setError(`${data?.error || "Could not start the video."} ${reasons}`.trim());
+        return;
+      }
+      setFinished(null);
+      setActiveJob({ id: data.jobId, at: new Date().toISOString() });
+      setJobsRefresh((n) => n + 1);
+    } catch (e) {
       setError(`Request failed: ${e.message}`);
     } finally {
-      inFlight.current = false;
+      setSubmitting(false);
     }
   }
 
-  const processing = phase === "processing";
+  const onFinished = useCallback((job, record) => {
+    setFinished({ job, record });
+    setJobsRefresh((n) => n + 1);
+  }, []);
+
+  function openJob(id) {
+    setFinished(null);
+    setActiveJob({ id, at: new Date().toISOString() });
+  }
+  function remake() {
+    writeStored("mac.activeJob", null);
+    setFinished(null);
+    setStep(storyboard ? "Create" : "Direction");
+  }
+
+  // A video for something else: back to Source with nothing carried over
+  // (language and format settings are kept — they are the customer's defaults).
+  function startNew() {
+    writeStored("mac.activeJob", null);
+    setFinished(null);
+    setStoryboard(null);
+    setImported(null);
+    setImage(null);
+    setPreview(null);
+    setError("");
+    setForm({ productName: "", brand: "", description: "", offer: "", cta: "", destinationUrl: "" });
+    setStep("Source");
+  }
+
+  const sv = status?.providers?.sceneVideo;
+  const blockers = preview?.preflight?.blockers || [];
+  const warnings = preview?.preflight?.warnings || [];
+  const prod = preview?.production;
+  const canCreate = Boolean(storyboard && payload.productName && preview && !preview.error && blockers.length === 0 && !submitting);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8">
-      {/* Status banner */}
+    <div className="mx-auto max-w-5xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8">
+      <Stepper step={currentStep} />
+
       {status && (
-        <div className="card mb-6 flex items-start gap-2 px-4 py-3 text-sm text-muted break-anywhere">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-          <div>
-            Active provider: <b>{status.provider}</b>.{" "}
-            {status.provider === "mock" ? (
-              <span>
-                Mock mode — generations are <b>free placeholders</b>, no API
-                calls. Set <code>VIDEO_PROVIDER=gemini</code> and{" "}
-                <code>ENABLE_PAID_GENERATION=true</code> for real video.
-              </span>
-            ) : status.paidGenerationEnabled ? (
-              <span>Real Gemini generation is ON — calls will incur cost.</span>
-            ) : (
-              <span>
-                Real provider selected but paid generation is{" "}
-                <b>disabled</b>. Set <code>ENABLE_PAID_GENERATION=true</code>.
-              </span>
-            )}
-          </div>
+        <div className="card mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm text-muted">
+          <ShieldCheck className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+          {sv?.real ? (
+            <span>AI video is <b className="text-ink">on</b> · {sv.chain?.filter((m) => m.available).map((m) => m.label).join(" → ") || "no model available right now"}{status.providers.autoSwitch ? " · switches automatically" : ""} · ~{sv.availableToday} clips left today</span>
+          ) : (
+            <span>AI video is <b className="text-ink">off</b> on this server — exports use your real images and motion graphics only.</span>
+          )}
+          {status.providers?.budget?.spend && (
+            <span className="ml-auto mono-meta">today ${status.providers.budget.spend.today.usedUsd.toFixed(2)} / ${status.providers.budget.spend.today.limitUsd}</span>
+          )}
         </div>
       )}
 
-      {/* Create-from mode switcher (segmented control; full-width on mobile) */}
-      <div className="mb-6">
-        <div className="eyebrow mb-3">Create from</div>
-        <div
-          role="tablist"
-          aria-label="Create from"
-          className="grid w-full grid-cols-2 gap-1 rounded-xl border border-line bg-surface p-1 sm:inline-grid sm:w-auto"
-        >
-          <button
-            role="tab"
-            aria-selected={mode === "url"}
-            onClick={() => setMode("url")}
-            className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium ${
-              mode === "url" ? "bg-accent text-accent-contrast" : "text-muted hover:text-ink"
-            }`}
-          >
-            <Link2 className="h-4 w-4" aria-hidden="true" /> Product URL
-          </button>
-          <button
-            role="tab"
-            aria-selected={mode === "manual"}
-            onClick={() => setMode("manual")}
-            className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium ${
-              mode === "manual" ? "bg-accent text-accent-contrast" : "text-muted hover:text-ink"
-            }`}
-          >
-            <Upload className="h-4 w-4" aria-hidden="true" /> Upload manually
-          </button>
-        </div>
-      </div>
-
-      {mode === "url" ? (
-        <ProductImport onImported={handleImported} />
-      ) : (
-      <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-        {/* LEFT: form */}
+      {activeJob ? (
         <div className="space-y-6">
-          {imported && (
-            <div className="card px-4 py-3 text-sm" style={{ borderLeft: "3px solid var(--accent)" }}>
-              <span className="mono-meta !text-accent">Imported</span>
-              <span className="ml-2 text-muted">
-                {imported.brandProfile?.name ? `brand: ${imported.brandProfile.name} · ` : ""}
-                {imported.brandProfile ? `influence: ${imported.brandInfluence}` : "no brand detected"} ·
-                fields prefilled below — edit before generating.
-              </span>
-              {importedImages.length > 0 && (
-                <div className="mt-2 flex gap-2 overflow-x-auto">
-                  {[...new Set(importedImages)].slice(0, 6).map((u, i) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={`${u}#${i}`} src={u} alt="" className="h-14 w-14 shrink-0 rounded border border-line object-contain" />
-                  ))}
-                </div>
-              )}
-            </div>
+          {!finished && <JobTracker key={activeJob.id} jobId={activeJob.id} onFinished={onFinished} />}
+          {finished && (
+            <>
+              <ResultPanel job={finished.job} record={finished.record} onRemake={remake} onNew={startNew} />
+              {!finished.job.hasVideo && <JobTracker key={`${activeJob.id}-done`} jobId={activeJob.id} onFinished={() => {}} onDismiss={remake} />}
+            </>
           )}
-          {/* Upload */}
-          <section>
-            <label className="eyebrow mb-2 block">{labels.image}</label>
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                onPickFile(e.dataTransfer.files?.[0]);
-              }}
-              onClick={() => fileInputRef.current?.click()}
-              className={`frame-corners relative flex min-h-44 cursor-pointer flex-col items-center justify-center gap-2 rounded-brand border bg-surface p-6 text-center transition ${
-                dragOver ? "border-accent" : "border-line hover:border-ink"
-              }`}
-            >
-              <span className="corner tl" />
-              <span className="corner tr" />
-              <span className="corner bl" />
-              <span className="corner br" />
-              {image ? (
-                // Local object-URL preview of a user-selected file; next/image
-                // cannot optimize blob: URLs, so a raw <img> is correct here.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={image.previewUrl}
-                  alt="Product preview"
-                  className="max-h-40 rounded-lg object-contain"
-                />
-              ) : (
-                <>
-                  <Upload className="h-7 w-7 text-muted" />
-                  <p className="text-sm text-muted">
-                    Drag &amp; drop or click to upload
-                  </p>
-                  <p className="mono-meta">PNG / JPEG / WEBP · MAX 5 MB</p>
-                </>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ALLOWED_MIME.join(",")}
-                className="hidden"
-                onChange={(e) => onPickFile(e.target.files?.[0])}
-              />
-            </div>
-            {image && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setImage(null);
-                }}
-                className="mt-2 text-xs text-muted underline hover:text-ink"
-              >
-                Remove image
-              </button>
-            )}
-          </section>
-
-          {/* Fields */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={labels.name}>
-              <input
-                className="input"
-                value={form.productName}
-                onChange={update("productName")}
-                placeholder="Hydrating Face Serum"
-              />
-            </Field>
-            <Field label="Brand">
-              <input
-                className="input"
-                value={form.brand}
-                onChange={update("brand")}
-                placeholder="Lumière"
-              />
-            </Field>
-          </div>
-          <Field label="Description">
-            <textarea
-              className="input min-h-20"
-              value={form.description}
-              onChange={update("description")}
-              placeholder="Lightweight serum with hyaluronic acid for all-day hydration."
-            />
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Offer">
-              <input
-                className="input"
-                value={form.offer}
-                onChange={update("offer")}
-                placeholder="20% off this week"
-              />
-            </Field>
-            <Field label="Call to action">
-              <input
-                className="input"
-                value={form.cta}
-                onChange={update("cta")}
-                placeholder="Shop now"
-              />
-            </Field>
-          </div>
-
-          {/* Production format — determines the ACTUAL production route */}
-          <Field label="Video format">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {FORMATS.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => update("format")(f.id)}
-                  className={`rounded-brand border p-3 text-left text-sm transition ${
-                    form.format === f.id ? "border-accent bg-surface" : "border-line bg-surface hover:border-ink"
-                  }`}
-                >
-                  <div className="font-medium">
-                    {form.format === f.id && <span className="text-accent">▸ </span>}
-                    {f.label}
-                  </div>
-                  <div className="mono-meta mt-0.5">{f.hint}</div>
-                  {f.kind === "deterministic" ? (
-                    <div className="mt-1 text-[11px] text-accent">✓ Available now · no AI-video credits</div>
-                  ) : (
-                    <div className="mt-1 text-[11px] text-muted">Dry-run while paid generation is disabled</div>
-                  )}
-                </button>
-              ))}
-            </div>
-          </Field>
-
-          {/* Template */}
-          <Field label="Ad template">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {TEMPLATES.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => update("template")(t.id)}
-                  className={`rounded-brand border p-3 text-left text-sm transition ${
-                    form.template === t.id
-                      ? "border-accent bg-surface"
-                      : "border-line bg-surface hover:border-ink"
-                  }`}
-                >
-                  <div className="font-medium">
-                    {form.template === t.id && <span className="text-accent">▸ </span>}
-                    {t.label}
-                  </div>
-                  <div className="mono-meta mt-0.5">{t.hint}</div>
-                </button>
-              ))}
-            </div>
-          </Field>
-
-          {/* Options */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Aspect ratio">
-              <select
-                className="input"
-                value={form.aspectRatio}
-                onChange={update("aspectRatio")}
-              >
-                {RATIOS.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Resolution">
-              <select
-                className="input"
-                value={form.resolution}
-                onChange={update("resolution")}
-              >
-                {RESOLUTIONS.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Duration (s)">
-              <input
-                type="number"
-                min={3}
-                max={15}
-                className="input"
-                value={form.durationSeconds}
-                onChange={update("durationSeconds")}
-              />
-            </Field>
-          </div>
-
-          {/* Prompt preview — this is the EXACT server-compiled prompt */}
-          <Field label="Prompt preview (exact server prompt, editable)">
-            {serverPreview && !editingPrompt && (
-              <div className="mono-meta mb-1">
-                {serverPreview.entityType} · {serverPreview.generationMode}
-                {previewLoading ? " · updating…" : ""}
-              </div>
-            )}
-            <textarea
-              className="input min-h-28 font-mono text-xs"
-              value={promptPreview}
-              placeholder={previewLoading ? "Compiling creative plan…" : "Enter a name to see the plan."}
-              onChange={(e) => setPromptEdit(e.target.value)}
-            />
-            {editingPrompt && (
-              <button
-                type="button"
-                className="mt-1 text-xs text-accent underline"
-                onClick={() => setPromptEdit(null)}
-              >
-                Reset to the server-generated prompt
-              </button>
-            )}
-          </Field>
-
-          {/* AI Creative Director storyboard — READ-ONLY (approve or regenerate),
-              never an editable timeline. Shown once a concept yields shots. */}
-          {(storyboard || storyboardLoading) && (
-            <section className="card p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="eyebrow">AI storyboard</div>
-                <div className="flex items-center gap-2">
-                  {storyboard?.origin && (
-                    <span className={`mono-meta ${storyboard.origin === "ai" ? "!text-accent" : "text-muted"}`}>
-                      {storyboard.origin === "ai" ? "AI Creative Director" : "deterministic fallback"}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={buildStoryboard}
-                    disabled={storyboardLoading || !imported?.concept}
-                    className="text-xs text-accent underline disabled:opacity-50"
-                  >
-                    {storyboardLoading ? "Generating…" : "Regenerate"}
+        </div>
+      ) : (
+        <>
+          {step === "Source" && (
+            <section aria-labelledby="source-title" className="space-y-4">
+              <h1 id="source-title" className="text-xl font-semibold">What are we advertising?</h1>
+              <div role="tablist" aria-label="Create from" className="grid w-full grid-cols-2 gap-1 rounded-xl border border-line bg-surface p-1 sm:inline-grid sm:w-auto">
+                {[["url", "Website or product link", Link2], ["manual", "Upload & describe", Upload]].map(([id, label, Icon]) => (
+                  <button key={id} role="tab" aria-selected={mode === id} onClick={() => setMode(id)}
+                    className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium ${mode === id ? "bg-accent text-accent-contrast" : "text-muted hover:text-ink"}`}>
+                    <Icon className="h-4 w-4" aria-hidden="true" /> {label}
                   </button>
-                </div>
+                ))}
               </div>
-              {storyboard?.logline && (
-                <p className="mt-1 text-sm text-muted break-anywhere">“{storyboard.logline}”</p>
-              )}
-              {storyboard?.note && (
-                <p className="mt-1 text-[11px] text-muted">{storyboard.note}</p>
-              )}
-              {storyboardLoading && !storyboard ? (
-                <div className="mt-3 flex items-center gap-2 text-sm text-muted">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Directing the storyboard…
-                </div>
+              {mode === "url" ? (
+                <ProductImport onImported={handleImported} />
               ) : (
-                <ol className="mt-3 space-y-2">
-                  {storyboard?.shots?.map((s, i) => (
-                    <li key={i} className="rounded-brand border border-line bg-surface p-2.5 text-sm">
-                      <div className="mono-meta flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <span className="!text-accent">SHOT {i + 1}</span>
-                        <span>{Number(s.durationSec).toFixed(1)}s</span>
-                        <span>· {s.intent}</span>
-                        <span className="rounded bg-line px-1.5 py-0.5">{s.technique}</span>
-                      </div>
-                      <div className="mt-1 text-ink break-anywhere">{s.visual}</div>
-                      {s.onScreenText && (
-                        <div className="mt-1 text-xs text-muted">
-                          On-screen: <span className="text-ink">“{s.onScreenText}”</span>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ol>
+                <div className="card space-y-4 p-4 sm:p-6">
+                  <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
+                    <button type="button" onClick={() => fileRef.current?.click()} className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-brand border border-dashed border-line bg-surface p-3 text-sm text-muted hover:border-ink">
+                      {image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={image.previewUrl} alt="Selected product" className="max-h-36 rounded object-contain" />
+                      ) : (<><Upload className="h-6 w-6" aria-hidden="true" /> Add a product photo<span className="mono-meta">PNG / JPEG / WEBP · 5 MB</span></>)}
+                    </button>
+                    <input ref={fileRef} type="file" accept={ALLOWED_MIME.join(",")} className="hidden" onChange={(e) => onPickFile(e.target.files?.[0])} aria-label="Product photo" />
+                    <div className="space-y-3">
+                      <Field label="Product or business name *"><input className="input" value={form.productName} onChange={(e) => setForm({ ...form, productName: e.target.value })} /></Field>
+                      <Field label="Brand"><input className="input" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} /></Field>
+                    </div>
+                  </div>
+                  <Field label="What is it and who is it for?"><textarea className="input min-h-20" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+                  <button type="button" className="btn btn-primary" disabled={!form.productName.trim()} onClick={() => setStep("Direction")}>Continue <ArrowRight className="h-4 w-4" aria-hidden="true" /></button>
+                </div>
               )}
             </section>
           )}
-        </div>
 
-        {/* RIGHT: generate + result */}
-        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-          <div className="card p-5">
-            {/* production-equipment style metadata readout */}
-            <div className="mono-meta mb-4 grid grid-cols-2 gap-y-1.5">
-              <span>{String(form.durationSeconds).padStart(2, "0")}:00 SEC</span>
-              <span className="text-right">{form.resolution.toUpperCase()}</span>
-              <span>{form.aspectRatio}</span>
-              <span className="text-right">
-                {(status?.model?.label || "MODEL").toUpperCase()}
-              </span>
-            </div>
+          {(step === "Direction" || step === "Create") && (
+            <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+              <div className="space-y-5">
+                <div className="flex items-center gap-2">
+                  <button type="button" className="btn btn-secondary" onClick={() => setStep("Source")}><ArrowLeft className="h-4 w-4" aria-hidden="true" /> Source</button>
+                  <h1 className="text-xl font-semibold">{imported?.focus?.title || form.productName || "Your ad"}</h1>
+                </div>
+                {imported?.focus && <p className="text-sm text-muted break-anywhere">Focus: {imported.focus.title} · {referenceAssets.length} image(s) selected</p>}
 
-            {/* Active production providers — real vs mock, straight from the server. */}
-            {status?.providers && (
-              <div className="mono-meta mb-3 space-y-0.5 border-t border-line pt-3 !normal-case">
-                <div>
-                  IMAGES: {status.providers.image.real ? "REAL" : "MOCK"} · {status.providers.image.provider}/{status.providers.image.model}
-                </div>
-                <div>
-                  SCENE VIDEO: {status.providers.sceneVideo.real ? "REAL" : "OFF"} · {status.providers.sceneVideo.model}
-                </div>
-                <div>AUDIO: none (silent)</div>
-                <div className="text-muted">
-                  job cap ${status.providers.budget.maxUsd} · ≤{status.providers.budget.maxImages} img · ≤{status.providers.budget.maxVideoClips} clip
-                </div>
-              </div>
-            )}
+                <LanguagePicker value={language} onChange={(l) => { setLanguage(l); setStoryboard(null); }} narration={settings.narration !== false} />
 
-            {/* Creative readiness (from the server preflight). Blocks generation
-                on obvious problems so credits aren't wasted. */}
-            {serverPreview?.preflight && (
-              <div className="mb-3 border-t border-line pt-3">
-                {serverPreview.preflight.readyForPaidGeneration ? (
-                  <div className="mono-meta" style={{ color: "var(--accent)" }}>
-                    ✓ CREATIVE READY
+                <fieldset className="card grid gap-3 p-4 sm:grid-cols-2">
+                  <legend className="sr-only">Video settings</legend>
+                  <Field label="Length">
+                    <select className="input" value={settings.durationSeconds} onChange={(e) => { setSettings({ ...settings, durationSeconds: Number(e.target.value) }); setStoryboard(null); }}>
+                      {[8, 10, 12, 15, 20].map((s) => <option key={s} value={s}>{s} seconds</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Format">
+                    <select className="input" value={settings.aspectRatio} onChange={(e) => { setSettings({ ...settings, aspectRatio: e.target.value }); setStoryboard(null); }}>
+                      <option value="9:16">Vertical 9:16 (Reels, TikTok, Shorts)</option>
+                      <option value="16:9">Landscape 16:9 (YouTube, web)</option>
+                    </select>
+                  </Field>
+                  <Field label="Quality">
+                    <select className="input" value={settings.resolution} onChange={(e) => setSettings({ ...settings, resolution: e.target.value })}>
+                      <option value="1080p">1080p (recommended)</option>
+                      <option value="720p">720p (smaller file)</option>
+                    </select>
+                  </Field>
+                  <label className="flex min-h-11 items-center gap-2 text-sm">
+                    <input type="checkbox" checked={settings.narration !== false} onChange={(e) => setSettings({ ...settings, narration: e.target.checked })} />
+                    Voiceover narration
+                  </label>
+                  <Field label="Call to action"><input className="input" maxLength={80} value={form.cta} onChange={(e) => { setForm({ ...form, cta: e.target.value }); }} placeholder="e.g. Shop the collection" /></Field>
+                  <Field label="Link shown at the end"><input className="input" type="url" value={form.destinationUrl} onChange={(e) => setForm({ ...form, destinationUrl: e.target.value })} placeholder="https://" /></Field>
+                  <Field label="Offer (only if real)"><input className="input" maxLength={240} value={form.offer} onChange={(e) => setForm({ ...form, offer: e.target.value })} placeholder="e.g. Free shipping over ₹999" /></Field>
+                </fieldset>
+
+                <section className="card p-4" aria-labelledby="plan-title">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-accent" aria-hidden="true" />
+                    <h2 id="plan-title" className="text-sm font-semibold">Creative plan</h2>
+                    {storyboard?.origin && <span className={`mono-meta ${storyboard.origin === "ai" ? "!text-accent" : ""}`}>{storyboard.origin === "ai" ? "AI creative director" : "basic fallback"}</span>}
+                    <button type="button" className="btn btn-secondary ml-auto" onClick={buildStoryboard} disabled={storyboardState.loading || !concept}>
+                      {storyboardState.loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+                      {storyboard ? "Regenerate" : "Plan my ad"}
+                    </button>
                   </div>
-                ) : (
-                  <div className="mono-meta">⚠ NOT READY</div>
-                )}
-                {serverPreview.preflight.blockers?.map((b, i) => (
-                  <p key={i} className="mt-1 text-xs" style={{ color: "var(--danger, #c00)" }}>
-                    • {b}
-                  </p>
-                ))}
-                {serverPreview.preflight.warnings?.slice(0, 2).map((w, i) => (
-                  <p key={i} className="mt-1 text-xs text-muted">• {w}</p>
-                ))}
-              </div>
-            )}
-
-            <div className="mb-4 flex items-center justify-between border-t border-line pt-3">
-              <span className="mono-meta">Est. cost</span>
-              <span className="font-semibold text-accent">{estCostLabel}</span>
-            </div>
-            <button
-              onClick={generate}
-              disabled={processing || serverPreview?.preflight?.readyForPaidGeneration === false}
-              className="btn btn-primary w-full justify-between"
-            >
-              {processing ? (
-                <>
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" /> GENERATING…
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span>GENERATE VIDEO</span>
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </button>
-            <p className="mono-meta mt-3">Estimate only — confirm in AI Studio.</p>
-          </div>
-
-          {error && (
-            <div className="alert alert-danger" role="alert">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="break-anywhere">{error}</span>
-            </div>
-          )}
-
-          {result?.dryRun && (
-            <div className="card space-y-3 p-5">
-              <div className="accent-chip !rounded-md">
-                <span className="accent-dot" />
-                <span className="mono-meta !text-ink">Dry run — no video generated, no credits spent</span>
-              </div>
-              <p className="text-sm text-muted">{result.note}</p>
-              {result.plan && (
-                <div className="space-y-3 text-sm">
-                  <div>
-                    <div className="eyebrow mb-1">Offering</div>
-                    <div className="break-anywhere">
-                      <b>{result.plan.offering.brand || result.plan.offering.name}</b>
-                      {result.plan.offering.category ? ` · ${result.plan.offering.category}` : ""}
-                      {result.plan.offering.offering ? ` — ${result.plan.offering.offering}` : ""}
-                    </div>
-                  </div>
-                  {result.plan.message?.centralMessage && (
-                    <div>
-                      <div className="eyebrow mb-1">Central message</div>
-                      <div className="break-anywhere">{result.plan.message.centralMessage}</div>
-                    </div>
+                  {storyboardState.error && <p className="mt-2 text-sm" role="alert">{storyboardState.error}</p>}
+                  {!storyboard && !storyboardState.loading && <p className="mt-2 text-sm text-muted">We&apos;ll write the brief, script and shot list in {language?.mode === "mixed" ? "your mixed-language style" : "your language"} — no video is generated or charged at this step.</p>}
+                  {storyboard?.brief && (
+                    <dl className="mt-3 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+                      {[["Focus", storyboard.brief.focus], ["Audience", storyboard.brief.audience], ["Main message", storyboard.brief.mainMessage], ["Hook", storyboard.brief.hook], ["Why believe it", storyboard.brief.reasonToBelieve], ["CTA", storyboard.brief.cta]].filter(([, v]) => v).map(([k, v]) => (
+                        <div key={k}><dt className="mono-meta">{k}</dt><dd className="break-anywhere">{v}</dd></div>
+                      ))}
+                    </dl>
                   )}
-                  <div>
-                    <div className="eyebrow mb-1">Storyboard</div>
-                    <ol className="list-decimal space-y-1 pl-5">
-                      {result.plan.storyboard.map((s) => (
-                        <li key={s.scene} className="break-anywhere">
-                          <b>{s.purpose}</b> ({s.durationSec}s): {s.visual}
+                  {storyboard?.shots && (
+                    <ol className="mt-3 space-y-2">
+                      {storyboard.shots.map((s, i) => (
+                        <li key={i} className="rounded-brand border border-line p-2.5 text-sm">
+                          <div className="mono-meta flex flex-wrap gap-x-2"><span className="!text-accent">SHOT {i + 1}</span><span>{Number(s.durationSec).toFixed(1)}s</span><span>{s.intent}</span><span>{s.technique?.replace("_", " ")}</span>{s.transitionOut && <span>→ {s.transitionOut}</span>}</div>
+                          {s.purpose && <p className="mt-0.5 text-muted break-anywhere">{s.purpose}</p>}
+                          {s.onScreenText && <p className="mt-1 break-anywhere">Caption: <b>{s.onScreenText}</b></p>}
+                          {s.voiceover && <p className="break-anywhere text-muted">Voice: “{s.voiceover}”</p>}
                         </li>
                       ))}
                     </ol>
-                  </div>
-                  <div>
-                    <div className="eyebrow mb-1">Exact on-screen copy (rendered by compositor, not the model)</div>
-                    <ul className="list-disc pl-5">
-                      {result.plan.deterministicCopy.brand && <li>Brand: {result.plan.deterministicCopy.brand}</li>}
-                      {result.plan.deterministicCopy.offer && <li>Offer: {result.plan.deterministicCopy.offer}</li>}
-                      {result.plan.deterministicCopy.cta && <li>CTA: {result.plan.deterministicCopy.cta}</li>}
+                  )}
+                  {storyboard?.validation?.findings?.length > 0 && (
+                    <ul className="mt-3 space-y-0.5 text-xs">
+                      {storyboard.validation.findings.map((f, i) => <li key={i} className={f.level === "error" ? "font-medium" : "text-muted"}>{f.level === "error" ? "✕" : "•"} {f.message}</li>)}
                     </ul>
-                  </div>
-                  <div className="mono-meta">
-                    Est. cost if generated: ${Number(result.plan.estimatedCost?.amountUsd ?? 0).toFixed(2)}
-                  </div>
-                </div>
-              )}
-              <p className="text-xs text-muted">
-                Tip: choose a <b>Screen demo</b> or <b>Narrated brand card</b> format to produce a
-                real finished video now, with no paid generation.
-              </p>
-            </div>
-          )}
-
-          {result && !result.dryRun && (
-            <div className="card space-y-3 p-5">
-              {result.mock && (
-                <div className="accent-chip !rounded-md">
-                  <span className="accent-dot" />
-                  <span className="mono-meta !text-ink">Mock — placeholder, not real generation</span>
-                </div>
-              )}
-              {result.deterministic && (
-                <div className="accent-chip !rounded-md">
-                  <span className="accent-dot" />
-                  <span className="mono-meta !text-ink">
-                    Rendered from your real assets · {result.render?.usedImages ?? 0} image(s) ·{" "}
-                    {result.render?.generatedKeyframes ?? 0} AI keyframe(s) · no paid AI-video cost
-                  </span>
-                </div>
-              )}
-              {/* Quality verification: an honest flag when the output is mostly
-                  empty cards (the black-slideshow failure) rather than a real ad. */}
-              {result.render?.quality?.warnings?.length > 0 && (
-                <div className="alert alert-danger" role="alert">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                  <div className="break-anywhere">
-                    <b>Quality check</b>
-                    {result.render.quality.warnings.map((w, i) => (
-                      <p key={i} className="text-xs">• {w}</p>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {/* Media canvas stays neutral-dark in both themes for media fidelity. */}
-              <div className="frame-corners media-canvas relative overflow-hidden rounded-brand">
-                <span className="corner tl" />
-                <span className="corner tr" />
-                <span className="corner bl" />
-                <span className="corner br" />
-                <video src={result.video} controls className="w-full" />
+                  )}
+                </section>
               </div>
-              <a
-                href={result.video}
-                download={result.downloadName}
-                className="btn btn-secondary w-full"
-              >
-                <Download className="h-4 w-4" /> Download MP4
-              </a>
 
-              {/* Per-shot production report: honest AI-generated vs deterministic
-                  accounting straight from the compositor's shotReport. */}
-              {result.render?.shotReport?.length > 0 && (
-                <div className="border-t border-line pt-3">
-                  <div className="eyebrow mb-2">
-                    Shot production
-                    {result.render.storyboardOrigin === "ai" ? (
-                      <span className="mono-meta ml-2 !text-accent">AI-directed storyboard</span>
-                    ) : result.render.storyboardDriven ? (
-                      <span className="mono-meta ml-2 text-muted">deterministic storyboard</span>
-                    ) : null}
-                  </div>
-                  <ol className="space-y-1.5 text-xs">
-                    {result.render.shotReport.map((s) => (
-                      <li key={s.shot} className="flex items-start gap-2 break-anywhere">
-                        <span className="mono-meta shrink-0 !text-accent">{String(s.shot).padStart(2, "0")}</span>
-                        <span className="flex-1">
-                          <span className="text-ink">{s.intent || "shot"}</span>{" "}
-                          <span className="text-muted">({Number(s.durationSec).toFixed(1)}s)</span>
-                          <br />
-                          <span
-                            className={`mono-meta ${s.aiGenerated ? "!text-accent" : "text-muted"}`}
-                          >
-                            {s.aiGenerated ? "AI-GENERATED" : "DETERMINISTIC"} · {s.visualSource || s.executedMethod}
-                          </span>
-                          {s.downgradedFrom && (
-                            <span className="block text-muted">
-                              requested {s.downgradedFrom} — not produced by a real model
-                            </span>
-                          )}
-                          {s.productionNotes?.map((n, k) => (
-                            <span key={k} className="block text-muted">{n}</span>
-                          ))}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                  <p className="mono-meta mt-2 text-muted">
-                    {result.render.shotReport.filter((s) => s.aiGenerated).length} AI-generated ·{" "}
-                    {result.render.shotReport.filter((s) => !s.aiGenerated).length} deterministic
-                  </p>
+              <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start" aria-label="Create">
+                <div className="card space-y-3 p-5">
+                  <h2 className="text-sm font-semibold">Review & create</h2>
+                  {!storyboard && <p className="text-sm text-muted">Plan the ad first.</p>}
+                  {preview?.error && <p className="text-sm" role="alert">{preview.error} {preview.details?.map((d) => d.message).join("; ")}</p>}
+                  {prod && (
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between"><span className="text-muted">Estimated cost</span><b>${prod.expectedUsd.toFixed(2)}</b></div>
+                      <div className="flex justify-between text-xs"><span className="text-muted">If models switch (worst case)</span><span>up to ${prod.worstCaseUsd.toFixed(2)}</span></div>
+                      <div className="flex justify-between text-xs"><span className="text-muted">AI-video shots</span><span>{prod.videoAvailable ? `${prod.clipsAllowed} of ${prod.videoShots}` : "off"}</span></div>
+                      {prod.clipCapWarning && <p className="text-xs">{prod.clipCapWarning}</p>}
+                      <p className="mono-meta !normal-case">{prod.basis}</p>
+                    </div>
+                  )}
+                  {blockers.length > 0 && (
+                    <ul className="space-y-0.5 text-xs" role="alert">
+                      {blockers.map((b, i) => <li key={i} className="font-medium" style={{ color: "var(--danger, #c00)" }}>• {b}</li>)}
+                    </ul>
+                  )}
+                  {warnings.slice(0, 4).map((w, i) => <p key={i} className="text-xs text-muted">• {w}</p>)}
+                  <button type="button" onClick={createVideo} disabled={!canCreate} className="btn btn-primary w-full justify-between">
+                    {submitting ? <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Starting…</span> : <><span>Create video</span><ArrowRight className="h-4 w-4" aria-hidden="true" /></>}
+                  </button>
+                  {error && (
+                    <div className="alert alert-danger" role="alert"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><span className="break-anywhere">{error}</span></div>
+                  )}
                 </div>
-              )}
-
-              <div className="mono-meta space-y-1 !normal-case">
-                <div className="uppercase">
-                  {result.provider} · {result.model}
-                </div>
-                {result.cost?.reported?.state === "billed" && (
-                  <div className="font-medium text-ink">
-                    BILLED ${Number(result.cost.reported.amountUsd).toFixed(4)}
-                    {result.usage?.total_tokens
-                      ? ` · ${result.usage.total_tokens} TOK`
-                      : ""}
-                  </div>
-                )}
-                {result.cost?.reported?.state === "unknown" && (
-                  <div>Actual cost unknown — check AI Studio billing.</div>
-                )}
-                <div className="normal-case tracking-normal">{result.cost?.note}</div>
-              </div>
+              </aside>
             </div>
           )}
-
-          {!result && !error && (
-            <div className="frame-corners relative flex items-center justify-center gap-2 rounded-brand border border-line bg-surface px-4 py-10 text-sm text-muted">
-              <span className="corner tl" />
-              <span className="corner tr" />
-              <span className="corner bl" />
-              <span className="corner br" />
-              <ImageIcon className="h-4 w-4" />
-              Your generated ad appears here.
-            </div>
-          )}
-        </aside>
-      </div>
+        </>
       )}
+
+      <div className="mt-8"><RecentJobs onOpen={openJob} refreshKey={jobsRefresh} /></div>
     </div>
   );
 }
@@ -1026,7 +471,7 @@ export default function Studio() {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="eyebrow mb-1.5 block">{label}</span>
+      <span className="mb-1 block text-xs text-muted">{label}</span>
       {children}
     </label>
   );
