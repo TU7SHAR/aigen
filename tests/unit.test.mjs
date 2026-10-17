@@ -41,13 +41,31 @@ test("validation rejects missing product name", () => {
   assert.equal(r.success, false);
 });
 
-test("validation rejects unknown template / ratio", () => {
+test("validation coerces an unknown template / ratio to safe defaults (no 422)", () => {
+  // The AI storyboard carries the real creative plan; `template`/`aspectRatio`
+  // only pick deterministic copy framing. An unknown or empty value from the
+  // Studio form must NOT hard-fail generation — it coerces to a neutral default.
   const r = generateRequestSchema.safeParse({
     productName: "X",
     template: "nope",
     aspectRatio: "4:5",
   });
-  assert.equal(r.success, false);
+  assert.equal(r.success, true);
+  assert.equal(r.data.template, "minimal");
+  assert.equal(r.data.aspectRatio, "9:16");
+});
+
+test("validation accepts an EMPTY template/ratio (the Studio 422 regression)", () => {
+  // Repro of the Studio bug: the concept carried no `template`, so the form
+  // posted template="" and every /api/generate returned 422. Must now coerce.
+  const r = generateRequestSchema.safeParse({
+    productName: "X",
+    template: "",
+    aspectRatio: "",
+  });
+  assert.equal(r.success, true);
+  assert.equal(r.data.template, "minimal");
+  assert.equal(r.data.aspectRatio, "9:16");
 });
 
 test("validation accepts a well-formed payload with defaults", () => {
