@@ -165,6 +165,21 @@ test("job budget refuses a reservation that would break the durable daily cap", 
   });
 });
 
+test("an aborted routed call stops instead of trying the next model (hedge loser / user cancel)", async () => {
+  const ac = new AbortController();
+  const calls = [];
+  const p = routeCall({
+    purpose: "text", chain: ["gemini-3.8-flash", "gemini-3.7-flash"], signal: ac.signal,
+    attempt: async (info) => {
+      calls.push(info.id);
+      ac.abort();
+      throw new ProviderError("aborted", { category: "timeout_uncertain", notCharged: true });
+    },
+  });
+  await assert.rejects(p, (e) => e instanceof RoutingError && e.category === "cancelled");
+  assert.deepEqual(calls, ["gemini-3.8-flash"]);
+});
+
 test("default video chain is cheapest-first current models; VIDEO_AUTO_SWITCH=false keeps only the head", () => {
   withEnv({ VIDEO_MODEL_CHAIN: undefined, VIDEO_MODEL: undefined, VIDEO_AUTO_SWITCH: undefined }, () => {
     assert.deepEqual(getChain("video").slice(0, 2), ["veo-3.1-lite", "veo-3.1-fast"]);

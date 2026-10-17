@@ -106,7 +106,7 @@ export default function ProductImport({ onImported }) {
       const p = json.productProfile || {};
       // A store homepage's title ("H&M | Online Fashion, Homeware & Kids…") is
       // not what the ad sells: use the confirmed focus as the advertised name.
-      const focusName = json.focus?.title && json.entityType !== "ecommerce_product" && json.focus.type !== "brand" ? json.focus.title : null;
+      const focusName = json.focus?.title && json.entityType !== "ecommerce_product" ? json.focus.title : null;
       setEdits({
         name: focusName || p.name || "",
         brand: p.brand || "",

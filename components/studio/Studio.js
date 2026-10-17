@@ -112,9 +112,12 @@ export default function Studio() {
   const buildStoryboard = useCallback(async () => {
     if (!concept) return;
     setStoryboardState({ loading: true, error: "" });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 180_000);
     try {
       const res = await fetch("/api/creative/storyboard", {
         method: "POST",
+        signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           concept,
@@ -153,7 +156,9 @@ export default function Studio() {
       setStoryboard({ ...data.storyboard, origin: data.origin, note: data.note });
       setStoryboardState({ loading: false, error: "" });
     } catch (e) {
-      setStoryboardState({ loading: false, error: `Planning failed: ${e.message}` });
+      setStoryboardState({ loading: false, error: e?.name === "AbortError" ? "Planning took too long and was stopped — nothing was charged. Try again." : `Planning failed: ${e.message}` });
+    } finally {
+      clearTimeout(timer);
     }
   }, [concept, form, imported, settings.durationSeconds, settings.aspectRatio, referenceAssets, image, language]);
 

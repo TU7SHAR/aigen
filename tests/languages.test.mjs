@@ -79,6 +79,13 @@ test("copy checks catch wrong scripts and missing mix languages", () => {
   assert.equal(hinglishEnglishOnly.ok, false);
   const hinglishOk = checkCopyLanguage({ mode: "mixed", preset: "hinglish" }, { captions: ["Ab skincare hua easy"], voiceover: ["अब skincare हुआ बिल्कुल easy"] });
   assert.equal(hinglishOk.ok, true);
+  // Live-run regression (H&M, 2026-10-17): Hinglish narration but English-only captions.
+  const englishCaptions = checkCopyLanguage({ mode: "mixed", preset: "hinglish" }, { captions: ["The Fall Upgrade is here", "Affordable autumn icons"], voiceover: ["Wardrobe को दीजिए stylish upgrade!"] });
+  assert.equal(englishCaptions.ok, false);
+  assert.ok(englishCaptions.findings.some((f) => f.field === "captions" && /English-only/.test(f.message)));
+  // Live-run regression: one Hindi line, then English sentences = alternation, not mixing.
+  const alternating = checkCopyLanguage({ mode: "mixed", preset: "hinglish" }, { captions: ["Naya season, naya style?"], voiceover: ["क्या आपका wardrobe ready है?", "Discover H&M wardrobe icons!", "Best quality at affordable prices.", "Shop the new looks!"] });
+  assert.ok(alternating.findings.some((f) => /alternates languages/.test(f.message)));
   const frenchAsEnglish = checkCopyLanguage({ primary: "fr-FR" }, { captions: ["The new collection is here"], voiceover: ["Get the new collection now, with your favourite pieces for the season"] });
   assert.equal(frenchAsEnglish.ok, false);
 });
