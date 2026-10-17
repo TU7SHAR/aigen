@@ -75,11 +75,13 @@ export default function Studio() {
   const [jobsRefresh, setJobsRefresh] = useState(0);
   const fileRef = useRef(null);
 
+  // Re-read on submit/finish too: the bar shows today's spend and clips left,
+  // which a finished job changes.
   useEffect(() => {
     let alive = true;
-    fetch("/api/generate").then((r) => r.json()).then((d) => { if (alive) setStatus(d); }).catch(() => {});
+    fetch("/api/generate", { cache: "no-store" }).then((r) => r.json()).then((d) => { if (alive) setStatus(d); }).catch(() => {});
     return () => { alive = false; };
-  }, []);
+  }, [jobsRefresh]);
 
   const currentStep = activeJob ? (finished ? "Result" : "Production") : step;
 

@@ -103,7 +103,8 @@ test("renderer: letterbox cropped, screen in a device card, end card, and a mixe
     const st = await probeStreams(f);
     assert.ok(st.hasAudio && st.hasVideo);
     const p = await probe(f);
-    assert.ok(p.durationSec > 3.6 && p.durationSec < 4.3, `duration ${p.durationSec}`);
+    // Shots keep their planned lengths (transitions overlap the incoming shot): 1.6 + 1.6 + 1.4 s at 24 fps.
+    assert.ok(Math.abs(p.durationSec - 110 / 24) < 0.05, `duration ${p.durationSec}`);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }

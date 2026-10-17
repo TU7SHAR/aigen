@@ -38,6 +38,7 @@ export default function ResultPanel({ job, record, onRemake }) {
   const checks = r.checks || {};
   const shots = r.render?.shotReport || [];
   const src = `/api/jobs/${job.id}/video`;
+  const vertical = Number(r.height) > Number(r.width);
   return (
     <section className="card space-y-4 p-5" aria-labelledby="result-title">
       <div className="flex items-center gap-2">
@@ -50,8 +51,16 @@ export default function ResultPanel({ job, record, onRemake }) {
           <span>Partial result: {r.partialReason} Those shots use other visuals — see the shot list.</span>
         </div>
       )}
-      <div className="media-canvas overflow-hidden rounded-brand">
-        <video src={src} controls playsInline preload="metadata" className="mx-auto max-h-[70vh] w-full" aria-label="Generated video ad" />
+      <div className="media-canvas flex justify-center overflow-hidden rounded-brand">
+        <video
+          src={src}
+          controls
+          playsInline
+          preload="metadata"
+          className={vertical ? "block h-[70vh] max-h-[720px] w-auto max-w-full" : "block h-auto max-h-[70vh] w-full"}
+          style={r.width && r.height ? { aspectRatio: `${r.width} / ${r.height}` } : undefined}
+          aria-label="Generated video ad"
+        />
       </div>
       <div className="flex flex-wrap gap-2">
         <a href={`${src}?download=1`} className="btn btn-primary"><Download className="h-4 w-4" aria-hidden="true" /> Download MP4</a>

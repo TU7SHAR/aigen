@@ -9,10 +9,12 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 
 import { createJob, getJob, claimJob, heartbeat, recoverableJobIds, updateJob, publicSummary } from "../lib/jobs/jobStore.js";
-import { computeTimeline, transitionAfter, pickFps, renderScreenAd } from "../lib/render/screenRenderer.js";
+import { computeTimeline, transitionAfter, pickFps, renderScreenAd, verifyShotCoverage } from "../lib/render/screenRenderer.js";
 import { runMediaChecks } from "../lib/quality/mediaChecks.js";
-import { runFfmpeg } from "../lib/render/ffmpeg.js";
+import { runFfmpeg, grayBandThumb } from "../lib/render/ffmpeg.js";
 import { submitJob } from "../lib/jobs/runner.js";
+import { veoPromptFor } from "../lib/ai/veoProvider.js";
+import { getModelInfo } from "../lib/ai/modelRegistry.js";
 
 test("same idempotency key → same job (double click / second tab never creates a second paid job)", () => {
   const key = `test-${Math.random()}`;
@@ -61,7 +63,7 @@ test("submitJob refuses explicit unsupported formats before creating a job", asy
   assert.equal(r.body.code, "VALIDATION");
 });
 
-test("timeline: storyboard transitions (cut = one frame, fade into the closing card)", () => {
+test("timeline: whole-frame transitions, planned shot starts and the planned total (MAC-015/016)", () => {
   const scenes = [
     { videoPath: "a.mp4", durationSec: 3, transitionOut: "cut" },
     { imagePath: "b.png", durationSec: 3, transitionOut: "whip" },
@@ -69,12 +71,86 @@ test("timeline: storyboard transitions (cut = one frame, fade into the closing c
   ];
   const fps = pickFps(scenes);
   assert.equal(fps, 24, "footage drives 24 fps");
-  assert.equal(transitionAfter(scenes, 0, fps).d, Number((1 / 24).toFixed(4)));
-  const intoEnd = transitionAfter(scenes, 1, fps);
-  assert.equal(intoEnd.xf, "fade");
+  assert.deepEqual(transitionAfter(scenes, 0, fps), { xf: "fade", frames: 1, d: 1 / 24 });
+  assert.equal(transitionAfter(scenes, 1, fps).xf, "fade", "the cut into the closing card is a short fade");
   const tl = computeTimeline(scenes, fps);
-  assert.ok(Math.abs(tl.total - (8.5 - tl.xfades.reduce((a, x) => a + x.d, 0))) < 0.002);
-  assert.equal(tl.starts.length, 3);
+  assert.deepEqual(tl.frames, [72, 72, 60]);
+  assert.deepEqual(tl.startFrames, [0, 72, 144], "every shot starts where the plan says");
+  assert.deepEqual(tl.starts, [0, 3, 6]);
+  assert.equal(tl.total, 8.5, "the export is exactly as long as the plan");
+  for (const x of tl.xfades) assert.ok(Number.isInteger(x.frames) && x.frames >= 1);
+  assert.deepEqual(tl.renderFrames, [72 + 1 + 1, 72 + tl.xfades[1].frames + 1, 60], "outgoing shots are rendered long enough to feed their transition");
+  // A transition never eats more than a third of a short shot.
+  const short = computeTimeline([{ videoPath: "a", durationSec: 1.2, transitionOut: "dissolve" }, { videoPath: "b", durationSec: 1.2 }], 24);
+  assert.ok(short.xfades[0].frames <= Math.floor(short.frames[0] / 3));
+});
+
+test("Veo 3.1 Lite gets negatives in the prompt (the API rejects negativePrompt); Fast keeps the parameter (MAC-014)", () => {
+  const req = { prompt: "A woman walks through a sunlit loft.", negativePrompt: "text, watermark, letterbox." };
+  const lite = veoPromptFor(req, getModelInfo("veo-3.1-lite"));
+  assert.equal(lite.negativePrompt, null);
+  assert.match(lite.prompt, /Avoid: text, watermark, letterbox\.$/);
+  const fast = veoPromptFor(req, getModelInfo("veo-3.1-fast"));
+  assert.equal(fast.prompt, req.prompt);
+  assert.equal(fast.negativePrompt, "text, watermark, letterbox.");
+  assert.deepEqual(veoPromptFor({ prompt: "p" }, getModelInfo("veo-3.1-lite")), { prompt: "p", negativePrompt: null });
+});
+
+/** Solid-grey 9:16 test clip (distinct luma per shot). */
+async function greyClip(file, level, seconds) {
+  const hex = level.toString(16).padStart(2, "0").repeat(3);
+  await runFfmpeg(["-y", "-f", "lavfi", "-i", `color=c=0x${hex}:s=180x320:r=24:d=${seconds}`, "-pix_fmt", "yuv420p", file]);
+}
+const bandMean = (buf) => buf.reduce((a, v) => a + v, 0) / buf.length;
+
+test("every shot is on screen at its planned time — three 1.5s cuts used to lose shot 3 (MAC-015)", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mac-assembly-test-"));
+  try {
+    const levels = [220, 128, 60];
+    const scenes = [];
+    for (let i = 0; i < levels.length; i++) {
+      const clip = path.join(dir, `s${i}.mp4`);
+      await greyClip(clip, levels[i], 2);
+      scenes.push({ videoPath: clip, durationSec: 1.5, transitionOut: "cut" });
+    }
+    scenes.push({ durationSec: 1.2, intent: "cta", purpose: "end" });
+    const out = await renderScreenAd({ scenes, overlays: [], width: 180, height: 320, brandColorHex: "#223366", accentHex: "#ff5a24" });
+    const file = path.join(dir, "out.mp4");
+    await fs.writeFile(file, out.buffer);
+    assert.ok(Math.abs(out.durationSec - 5.7) < 0.05, `planned 5.7s, got ${out.durationSec}`);
+    assert.equal(out.assembly.joinMode, "xfade");
+    assert.equal(out.assembly.checkedShots, 3);
+    for (let i = 0; i < levels.length; i++) {
+      const mid = out.timeline.starts[i] + 0.75;
+      const seen = bandMean(await grayBandThumb(file, mid));
+      // Studio-range luma: allow for the grey → YUV → grey round trip.
+      assert.ok(Math.abs(seen - levels[i]) < 16, `shot ${i + 1} at ${mid}s shows luma ${seen.toFixed(0)}, expected ≈${levels[i]}`);
+    }
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the assembly check reports a shot that is not on screen", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mac-coverage-test-"));
+  try {
+    const a = path.join(dir, "a.mp4");
+    const b = path.join(dir, "b.mp4");
+    const c = path.join(dir, "c.mp4");
+    await greyClip(a, 220, 1.5);
+    await greyClip(b, 128, 1.5);
+    await greyClip(c, 60, 1.5);
+    // A "composite" that shows A, B, B: shot 3 never appears.
+    const bad = path.join(dir, "bad.mp4");
+    await runFfmpeg(["-y", "-i", a, "-i", b, "-i", b, "-filter_complex", "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]", "-map", "[v]", "-pix_fmt", "yuv420p", bad]);
+    const tl = computeTimeline([{ videoPath: a, durationSec: 1.5 }, { videoPath: b, durationSec: 1.5 }, { videoPath: c, durationSec: 1.5 }], 24);
+    const clips = [a, b, c].map((p) => ({ path: p, mode: "footage" }));
+    const res = await verifyShotCoverage(clips, bad, tl);
+    assert.equal(res.checked, 3);
+    assert.deepEqual(res.missing.map((m) => m.shot), [3]);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("renders a small ad end to end and the export checks measure the real file", async () => {
