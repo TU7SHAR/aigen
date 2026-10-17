@@ -76,6 +76,8 @@ export default function ProductImport({ onImported }) {
   const [emphasis, setEmphasis] = useState([]); // string[]
   const [avoid, setAvoid] = useState([]); // string[]
   const [uploadError, setUploadError] = useState("");
+  // Campaign focus proposed by the importer (editable title; ask-when-ambiguous).
+  const [focus, setFocus] = useState(null);
 
   async function runImport(refresh = false) {
     setPhase("crawling");
@@ -120,22 +122,30 @@ export default function ProductImport({ onImported }) {
       // the importer returns (roles + storedUrl). The relevance-selected
       // primary (if any) is pre-selected; a logo/icon is never auto-primary.
       const primaryUrl = p.primaryImage || null;
+      const focusUrls = new Set(json.focus?.assetUrls || []);
+      const useFocus = focusUrls.size > 0;
       const importedAssets = (json.assets || [])
         .filter((a) => a && (a.storedUrl || a.sourceUrl))
         .map((a) => {
           const url = a.storedUrl || a.sourceUrl;
-          const isScene = !["logo", "icon", "navigation_asset", "unrelated"].includes(a.role);
+          const isScene = !["logo", "icon", "navigation_asset", "unrelated", "texture_background"].includes(a.role);
           return {
             url,
             role: a.role || "image",
-            // Pre-select scene-worthy assets; the user can change freely.
-            selected: isScene,
-            primary: primaryUrl ? url === primaryUrl : false,
+            // Pre-select the images that belong to the campaign focus (or every
+            // scene-worthy image when no focus was found); the user can change freely.
+            selected: useFocus ? focusUrls.has(url) : isScene,
+            primary: false,
+            inFocus: focusUrls.has(url),
             isUpload: false,
             width: a.width,
             height: a.height,
           };
         });
+      const focusFirst = json.focus?.assetUrls?.[0];
+      const primaryPick = (useFocus ? importedAssets.find((a) => a.url === focusFirst) : null) || importedAssets.find((a) => a.url === primaryUrl);
+      if (primaryPick) primaryPick.primary = true;
+      setFocus(json.focus || null);
       // Fallback: if the importer didn't return a structured assets[] array,
       // derive from the flat productImages list (no roles).
       if (importedAssets.length === 0 && Array.isArray(p.productImages)) {
@@ -356,6 +366,9 @@ export default function ProductImport({ onImported }) {
       userContext: (edits.userContext || "").trim() || undefined,
       emphasis,
       avoid,
+      focus: focus
+        ? { type: focus.type, title: (focus.title || "").trim(), rationale: focus.rationale || "", confidence: focus.confidence, source: focus.source, assetUrls: urlRefs.map((r) => r.url) }
+        : null,
       form: {
         productName: edits.name,
         brand: edits.brand,
@@ -535,6 +548,32 @@ export default function ProductImport({ onImported }) {
             <input className="input" value={edits.offer} onChange={(e) => editField("offer", e.target.value)} placeholder="e.g. 20% off" />
           </Field>
         </div>
+
+        {/* Campaign focus: what this ad is about (editable, honest about confidence) */}
+        {focus && (
+          <div className="rounded-brand border border-line bg-surface p-3" style={{ borderLeft: "3px solid var(--accent)" }}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="eyebrow">Ad focus</span>
+              <span className="mono-meta">{String(focus.type || "").replace(/_/g, " ")}</span>
+              <span className={`mono-meta ml-auto ${focus.confidence >= 0.5 ? "!text-accent" : ""}`}>
+                {focus.source === "ai" ? "AI-selected" : "best guess"} · confidence {Number(focus.confidence || 0).toFixed(2)}
+              </span>
+            </div>
+            <label className="mt-2 block">
+              <span className="sr-only">Ad focus title</span>
+              <input className="input" value={focus.title || ""} onChange={(e) => setFocus({ ...focus, title: e.target.value })} placeholder="What exactly should this ad sell?" />
+            </label>
+            {focus.rationale && <p className="mt-1 text-xs text-muted break-anywhere">{focus.rationale}</p>}
+            {focus.question && (
+              <p className="mt-2 text-sm" role="status">
+                <b>Please confirm:</b> {focus.question} Edit the focus above and keep only the matching images selected.
+              </p>
+            )}
+            {focus.rejected?.length > 0 && (
+              <p className="mt-1 text-xs text-muted">Not used: {focus.rejected.slice(0, 4).map((r) => r.reason).filter(Boolean).join(" · ")}</p>
+            )}
+          </div>
+        )}
 
         {/* Product PR A: asset manager (select / role / primary / remove / upload) */}
         <div className="space-y-3">
