@@ -42,5 +42,15 @@ export async function GET(request, { params }) {
     fs.closeSync(fd);
     return new Response(buf, { status: 206, headers: { ...headers, "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": String(buf.length) } });
   }
-  return new Response(fs.readFileSync(file), { status: 200, headers: { ...headers, "Content-Length": String(size) } });
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        const rs = fs.createReadStream(file);
+        rs.on("data", (chunk) => controller.enqueue(chunk));
+        rs.on("end", () => controller.close());
+        rs.on("error", (err) => controller.error(err));
+      },
+    }),
+    { status: 200, headers: { ...headers, "Content-Length": String(size) } }
+  );
 }

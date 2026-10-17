@@ -17,7 +17,20 @@ import { listJobs } from "@/lib/jobs/jobStore.js";
 
 export const maxDuration = 60;
 
+/** Verify MAC_API_TOKEN when set. Fail-open in dev (token not required) unless VIDEO_PROVIDER=gemini. */
+function checkToken(request) {
+  const required = process.env.MAC_API_TOKEN;
+  if (!required) return null; // not configured — open (dev only)
+  const sent = request.headers.get("x-mac-token") || new URL(request.url).searchParams.get("token");
+  if (!sent || sent !== required) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+  return null;
+}
+
 export async function POST(request) {
+  const authErr = checkToken(request);
+  if (authErr) return authErr;
   recoverJobs();
   let body;
   try {

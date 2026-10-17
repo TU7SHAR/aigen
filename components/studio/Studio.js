@@ -227,7 +227,12 @@ export default function Studio() {
     try {
       const res = await fetch("/api/jobs", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // When MAC_API_TOKEN is configured, the browser must echo it back.
+          // Set NEXT_PUBLIC_MAC_API_TOKEN to the same value as MAC_API_TOKEN.
+          ...(process.env.NEXT_PUBLIC_MAC_API_TOKEN ? { "x-mac-token": process.env.NEXT_PUBLIC_MAC_API_TOKEN } : {}),
+        },
         // One id per click-through: double clicks and retries reuse the same job.
         body: JSON.stringify({ ...payload, clientRequestId: `${(storyboard?.logline || "plan").slice(0, 40)}:${globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}` }),
       });
