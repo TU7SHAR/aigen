@@ -7,7 +7,7 @@
  * automatically), plus per-shot provenance and the production record.
  */
 
-import { Download, AlertCircle, CheckCircle2, RotateCcw } from "lucide-react";
+import { Download, AlertCircle, CheckCircle2, RotateCcw, Plus } from "lucide-react";
 
 const VERDICT = { pass: "Passed", warn: "Warnings", fail: "Failed", not_reviewed: "Not reviewed" };
 
@@ -32,7 +32,7 @@ function CheckGroup({ title, group }) {
   );
 }
 
-export default function ResultPanel({ job, record, onRemake }) {
+export default function ResultPanel({ job, record, onRemake, onNew }) {
   if (!job?.hasVideo) return null;
   const r = job.result || {};
   const checks = r.checks || {};
@@ -67,6 +67,11 @@ export default function ResultPanel({ job, record, onRemake }) {
         {onRemake && (
           <button type="button" className="btn btn-secondary" onClick={onRemake}>
             <RotateCcw className="h-4 w-4" aria-hidden="true" /> Edit and make another version
+          </button>
+        )}
+        {onNew && (
+          <button type="button" className="btn btn-secondary" onClick={onNew}>
+            <Plus className="h-4 w-4" aria-hidden="true" /> New video
           </button>
         )}
       </div>

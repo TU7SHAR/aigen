@@ -262,6 +262,20 @@ export default function Studio() {
     setStep(storyboard ? "Create" : "Direction");
   }
 
+  // A video for something else: back to Source with nothing carried over
+  // (language and format settings are kept — they are the customer's defaults).
+  function startNew() {
+    writeStored("mac.activeJob", null);
+    setFinished(null);
+    setStoryboard(null);
+    setImported(null);
+    setImage(null);
+    setPreview(null);
+    setError("");
+    setForm({ productName: "", brand: "", description: "", offer: "", cta: "", destinationUrl: "" });
+    setStep("Source");
+  }
+
   const sv = status?.providers?.sceneVideo;
   const blockers = preview?.preflight?.blockers || [];
   const warnings = preview?.preflight?.warnings || [];
@@ -291,7 +305,7 @@ export default function Studio() {
           {!finished && <JobTracker key={activeJob.id} jobId={activeJob.id} onFinished={onFinished} />}
           {finished && (
             <>
-              <ResultPanel job={finished.job} record={finished.record} onRemake={remake} />
+              <ResultPanel job={finished.job} record={finished.record} onRemake={remake} onNew={startNew} />
               {!finished.job.hasVideo && <JobTracker key={`${activeJob.id}-done`} jobId={activeJob.id} onFinished={() => {}} onDismiss={remake} />}
             </>
           )}
