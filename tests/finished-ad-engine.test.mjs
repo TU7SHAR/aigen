@@ -127,6 +127,7 @@ test("closing card gets brand title + CTA pill + URL; the brand mark stops befor
 test("video prompts guard product fidelity (no invented UI) and framing", () => {
   const p = comp.videoPrompt({ visual: "A man studying the app dashboard on a tablet" }, "9:16");
   assert.match(p, /screen faces away|out of focus/i);
-  assert.match(p, /9:16 full-frame/);
-  assert.match(p, /no speech, no music/i);
+  assert.match(p, /9:16 composition that fills the frame/);
+  assert.match(p, /no speech, no dialogue, no music/i);
+  assert.match(p, /No readable text/);
 });

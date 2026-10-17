@@ -41,31 +41,40 @@ test("validation rejects missing product name", () => {
   assert.equal(r.success, false);
 });
 
-test("validation coerces an unknown template / ratio to safe defaults (no 422)", () => {
-  // The AI storyboard carries the real creative plan; `template`/`aspectRatio`
-  // only pick deterministic copy framing. An unknown or empty value from the
-  // Studio form must NOT hard-fail generation — it coerces to a neutral default.
+test("validation rejects an explicit unsupported template / ratio / resolution with a field error", () => {
+  // Contract (MAC-003): absent or empty values get an intentional default, but
+  // an EXPLICIT unsupported value is a clear field error — the export format
+  // is never silently swapped for a different one.
   const r = generateRequestSchema.safeParse({
     productName: "X",
     template: "nope",
     aspectRatio: "4:5",
+    resolution: "8k",
   });
-  assert.equal(r.success, true);
-  assert.equal(r.data.template, "minimal");
-  assert.equal(r.data.aspectRatio, "9:16");
+  assert.equal(r.success, false);
+  const paths = r.error.issues.map((i) => i.path.join("."));
+  assert.deepEqual(paths.sort(), ["aspectRatio", "resolution", "template"]);
+  assert.match(r.error.issues.find((i) => i.path[0] === "aspectRatio").message, /16:9, 9:16/);
+});
+
+test("validation rejects wrong-typed template / ratio", () => {
+  const r = generateRequestSchema.safeParse({ productName: "X", template: 7, aspectRatio: true });
+  assert.equal(r.success, false);
 });
 
 test("validation accepts an EMPTY template/ratio (the Studio 422 regression)", () => {
   // Repro of the Studio bug: the concept carried no `template`, so the form
-  // posted template="" and every /api/generate returned 422. Must now coerce.
+  // posted template="" and every /api/generate returned 422. Must default.
   const r = generateRequestSchema.safeParse({
     productName: "X",
     template: "",
     aspectRatio: "",
+    resolution: "",
   });
   assert.equal(r.success, true);
   assert.equal(r.data.template, "minimal");
   assert.equal(r.data.aspectRatio, "9:16");
+  assert.equal(r.data.resolution, "1080p");
 });
 
 test("validation accepts a well-formed payload with defaults", () => {
@@ -75,8 +84,16 @@ test("validation accepts a well-formed payload with defaults", () => {
     aspectRatio: "16:9",
   });
   assert.equal(r.success, true);
-  assert.equal(r.data.resolution, "720p");
-  assert.equal(r.data.durationSeconds, 8);
+  assert.equal(r.data.resolution, "1080p"); // production default (MAC-006)
+  assert.equal(r.data.durationSeconds, 12);
+  assert.equal(r.data.narration, true);
+});
+
+test("validation accepts a mixed-language profile and rejects a malformed tag", () => {
+  const ok = generateRequestSchema.safeParse({ productName: "X", language: { mode: "mixed", preset: "hinglish", primary: "hi-IN", secondary: ["en-IN"], captionScript: "Latn" } });
+  assert.equal(ok.success, true);
+  const bad = generateRequestSchema.safeParse({ productName: "X", language: { primary: "hindi" } });
+  assert.equal(bad.success, false);
 });
 
 test("estimateCost scales with duration and resolution", () => {

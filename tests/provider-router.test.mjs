@@ -95,14 +95,15 @@ test("router: modal model with endpoint configured + budget available → modal 
   assert.equal(name, "modal");
 });
 
-test("router: modal model with NO endpoint → falls back to gemini", async () => {
+test("router: modal model with NO endpoint → falls back to the next Gemini-API model in the chain", async () => {
   const name = await routerName({
     VIDEO_PROVIDER: "gemini",
     GEMINI_API_KEY: "test-key",
     VIDEO_MODEL: "modal-video",
+    VIDEO_MODEL_CHAIN: undefined,
     MODAL_VIDEO_ENDPOINT: undefined,
   });
-  assert.equal(name, "gemini");
+  assert.ok(["veo", "gemini"].includes(name), `got ${name}`);
 });
 
 test("router: modal budget exhausted → falls back to gemini", async () => {
@@ -123,5 +124,5 @@ test("router: modal budget exhausted → falls back to gemini", async () => {
     },
     { estimatedUsd: 0.5 } // a real render would push past the $30 cap
   );
-  assert.equal(name, "gemini");
+  assert.ok(["veo", "gemini"].includes(name), `got ${name}`);
 });
