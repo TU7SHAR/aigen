@@ -23,6 +23,7 @@ const schema = z.object({
   entityType: z.string().optional(),
   objective: z.string().max(300).optional(),
   hasUsableImage: z.boolean().optional(),
+  focus: z.object({ title: z.string().max(200).optional(), type: z.string().max(40).optional(), rationale: z.string().max(600).optional() }).passthrough().nullable().optional(),
 });
 
 export async function POST(request) {
@@ -48,6 +49,7 @@ export async function POST(request) {
     entityType: d.entityType || d.product?.entityType || d.entity?.entityType,
     objective: d.objective,
     hasUsableImage: d.hasUsableImage,
+    focus: d.focus || null,
   });
   return NextResponse.json({ ok: true, ...result });
 }

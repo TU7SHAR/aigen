@@ -104,8 +104,11 @@ export default function ProductImport({ onImported }) {
       }
       setData(json);
       const p = json.productProfile || {};
+      // A store homepage's title ("H&M | Online Fashion, Homeware & Kids…") is
+      // not what the ad sells: use the confirmed focus as the advertised name.
+      const focusName = json.focus?.title && json.entityType !== "ecommerce_product" && json.focus.type !== "brand" ? json.focus.title : null;
       setEdits({
-        name: p.name || "",
+        name: focusName || p.name || "",
         brand: p.brand || "",
         description: p.description || "",
         price: p.price ?? "",
@@ -168,11 +171,11 @@ export default function ProductImport({ onImported }) {
       const confidence = json.extractionConfidence ?? 0;
       if (confidence >= 0.45) {
         await loadConcepts(json, {
-          name: p.name || "",
+          name: focusName || p.name || "",
           brand: p.brand || "",
           description: p.description || "",
           offer: p.offer || "",
-        });
+        }, json.focus || null);
       } else {
         setConcepts([]);
         setChosenConcept(null);
@@ -189,9 +192,10 @@ export default function ProductImport({ onImported }) {
   // Fetch concepts using the CURRENT edited values (so corrections flow into
   // the AI concept reasoning). `editsNow` lets the import path pass fresh values
   // before `edits` state has settled.
-  async function loadConcepts(json, editsNow) {
+  async function loadConcepts(json, editsNow, focusNow) {
     const p = json.productProfile || {};
     const e = editsNow || edits;
+    const f = focusNow === undefined ? focus : focusNow;
     setConceptsLoading(true);
     try {
       const cRes = await fetch("/api/creative/concepts", {
@@ -218,6 +222,7 @@ export default function ProductImport({ onImported }) {
           entityType: e.entityType || json.entityType,
           objective: e.objective || e.userContext || undefined,
           hasUsableImage: Boolean(heroUrl || p.primaryImage || p.productImages?.length),
+          focus: f ? { title: f.title, type: f.type, rationale: f.rationale } : null,
         }),
       });
       const cJson = await cRes.json();
@@ -403,6 +408,7 @@ export default function ProductImport({ onImported }) {
               type="url"
               inputMode="url"
               className="input pl-9"
+              style={{ paddingLeft: "2.25rem" }}
               placeholder="https://brand.com/products/product-name"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
@@ -561,7 +567,7 @@ export default function ProductImport({ onImported }) {
             </div>
             <label className="mt-2 block">
               <span className="sr-only">Ad focus title</span>
-              <input className="input" value={focus.title || ""} onChange={(e) => setFocus({ ...focus, title: e.target.value })} placeholder="What exactly should this ad sell?" />
+              <input className="input" value={focus.title || ""} onChange={(e) => { setFocus({ ...focus, title: e.target.value }); setConceptsStale(true); }} placeholder="What exactly should this ad sell?" />
             </label>
             {focus.rationale && <p className="mt-1 text-xs text-muted break-anywhere">{focus.rationale}</p>}
             {focus.question && (
